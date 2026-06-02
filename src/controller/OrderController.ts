@@ -117,7 +117,6 @@ export default class OrderController {
             gstAmount: Number(order.gstAmount || 0),
             items: order.items as any,
             paymentStatus: "pending",
-            // ✅ Yeh fields missing thin (jo schema mein required hain):
             gstPercent: 3,         // Default 3% 
             cgstPercent: 1.5,      // gstPercent / 2
             sgstPercent: 1.5,      // gstPercent / 2
