@@ -1,0 +1,102 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  email          String   @unique
+  password       String
+  phoneNumber    String   @unique  // database me phoneNumber hai
+  
+  // 🚀 NEW INJECTIONS: User permanent billing profile data layers
+  address        String?  @default("") // Defaults to blank string safely
+  pincode        String?  @default("")
+  alternatePhone String?  @default("")
+  
+  adminRole      Boolean? 
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+}
+
+model Product {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  category     String
+  subCategory  String?
+  price        Float
+  weight       Float
+  description  String?
+  images       Json?     // Normal square/portrait grid display images array
+  
+  // 🔥 NEW BANNER PIPELINE INJECTIONS
+  isBanner     Boolean  @default(false) // Dynamic banner visibility marker toggle
+  bannerImages Json?     // Holds explicit links layout: { desktopUrl: string, mobileUrl: string }
+
+  sku          String   @unique
+  stock        Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+}
+
+model Bill {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  billNo        String
+  invoiceNo     String
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  items         Json
+  totalAmount   Float
+  discount      Float
+  gstPercent    Float      
+  cgstPercent   Float?      
+  sgstPercent   Float?      
+  cgstAmount    Float?      
+  sgstAmount    Float?      
+  gstAmount     Float       
+  netAmount     Float
+  paymentStatus String    @default("pending")
+  invoicePdfUrl String?
+  created_at    DateTime  @default(now())
+}
+
+model Counter {
+  id   String @id @map("_id")
+  seq  Int
+}
+
+model Order {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  customerName  String
+  customerPhone String
+  address       String
+  pincode       String
+  items         Json
+  
+  // ✅ Billing Calculation Fields (Server-side handled)
+  adminPrice     Float?    // Product ka base price
+  gstAmount      Float?    // 3% of adminPrice
+  shippingCharge Float?    // Dynamic based on pincode
+  discount       Float?    @default(0)
+  totalAmount    Float?    // Final = (adminPrice - discount) + gst + shipping
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId // Order karne wale user ki ID
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
