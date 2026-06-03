@@ -7,8 +7,8 @@ import { v2 as cloudinary } from "cloudinary";
 // 🚀 CLOUDINARY CONFIGURATION (DYNAMICALLY CONNECTED TO YOUR .ENV KEYS)
 // ===================================================================
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
-  api_key: process.env.CLOUDINARY_API_KEY, 
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
@@ -17,21 +17,25 @@ function getPublicIdFromUrl(url: string): string | null {
   try {
     if (!url || !url.includes("cloudinary.com")) return null;
     
+    // Cloudinary URL structure: .../upload/v12345/folder/subfolder/filename.ext
     const parts = url.split("/upload/");
     if (parts.length < 2) return null;
     
-    let publicIdWithExt = parts[1];
+    let path = parts[1]; // e.g., "v1779599409/sohanlal_jewellers/products/z1mgrljflyxrcru1h9ae.webp"
     
-    if (publicIdWithExt.startsWith("v")) {
-      const firstSlashIdx = publicIdWithExt.indexOf("/");
-      publicIdWithExt = publicIdWithExt.substring(firstSlashIdx + 1);
+    // 1. Version number ("v177...") hatao
+    const segments = path.split("/");
+    if (segments[0].startsWith("v")) {
+      segments.shift(); 
     }
     
-    const lastDotIdx = publicIdWithExt.lastIndexOf(".");
-    if (lastDotIdx !== -1) {
-      return publicIdWithExt.substring(0, lastDotIdx);
-    }
-    return publicIdWithExt;
+    // 2. Ab bacha "sohanlal_jewellers/products/z1mgrljflyxrcru1h9ae.webp"
+    const fullPath = segments.join("/");
+    
+    // 3. Extension hatao (webp/jpg)
+    const publicId = fullPath.substring(0, fullPath.lastIndexOf("."));
+    
+    return publicId;
   } catch (error) {
     console.error("Error extracting public ID:", error);
     return null;
@@ -66,11 +70,17 @@ class ProductController {
       if (incomingImages && incomingImages.length > 0) {
         for (let i = 0; i < incomingImages.length; i++) {
           const imgStr = incomingImages[i];
-          
+
           if (imgStr.startsWith("data:image")) {
+            // cloudanary options mein ye add kar do
             const uploadRes = await cloudinary.uploader.upload(imgStr, {
               folder: "sohanlal_jewellers/products",
-              resource_type: "image"
+              resource_type: "image",
+              format: "webp",          // 🚀 Backend se force conversion
+              quality: "auto:good",    // 🚀 Cloudinary ko bolo ki size optimize kare
+              transformation: [
+                { width: 800, crop: "limit" } // 🚀 Image 800px se badi nahi hogi
+              ]
             });
             productImagesUrls.push(uploadRes.secure_url);
           } else {
@@ -118,7 +128,7 @@ class ProductController {
           price: Number(data.price),
           weight: Number(data.weight || 0),
           description: data.description || "",
-          images: productImagesUrls, 
+          images: productImagesUrls,
           isBanner: isBannerFlag,
           bannerImages: bannerPayload,
           sku,
@@ -210,7 +220,7 @@ class ProductController {
             finalizedUrls.push(imgStr);
           }
         }
-        
+
         // Re-assign back clean filtered tracking arrays array loops 
         updates.images = finalizedUrls;
       }
@@ -249,7 +259,7 @@ class ProductController {
       const { id } = req.params;
 
       const existingProduct = await prisma.product.findUnique({ where: { id } });
-      
+
       if (!existingProduct) {
         return res.status(404).json({ success: false, message: "Product not found" });
       }
@@ -259,11 +269,11 @@ class ProductController {
       if (productObj.images && Array.isArray(productObj.images)) {
         for (const imgUrl of productObj.images) {
           const pid = getPublicIdFromUrl(imgUrl);
-          console.log("➡️ TARGET PUBLIC ID TO DELETE:", pid);
-          
+          console.log("TARGET PUBLIC ID TO DELETE:", pid);
+
           if (pid) {
             const cloudDelRes = await cloudinary.uploader.destroy(pid);
-            console.log("💥 CLOUDINARY DELETION RESPONSE LOG:", cloudDelRes);
+            console.log("CLOUDINARY DELETION RESPONSE LOG:", cloudDelRes);
           }
         }
       }
