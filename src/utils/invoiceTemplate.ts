@@ -625,15 +625,34 @@ border-collapse:collapse;
 
 margin-top:18px;
 
+border:1px solid #d4a64f;
+
 }
 
 th{
 
-background:#4b0000;
+background:
+linear-gradient(
+180deg,
+#5a0f0f,
+#3a0606
+);
 
-color:white;
+color:#f4d38a;
 
-padding:10px;
+padding:12px 10px;
+
+font-size:13px;
+
+font-weight:700;
+
+letter-spacing:1px;
+
+text-transform:uppercase;
+
+border:
+
+1px solid #d4a64f;
 
 }
 
