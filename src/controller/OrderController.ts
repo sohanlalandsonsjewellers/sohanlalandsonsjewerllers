@@ -199,17 +199,16 @@ AUTO SAVE BILL
         const existingBill =
           await prisma.bill.findFirst({
             where: {
-              billNo: `ORDER-${order.id}`
+              billNo: `BILL-${order.id.slice(-6)}`
             }
           });
-
         if (!existingBill) {
 
           await prisma.bill.create({
 
             data: {
-
-              billNo: `ORDER-${order.id}`,
+              billNo:
+                `BILL-${order.id.slice(-6)}`,
 
               invoiceNo:
                 `SLAS-${order.id.slice(-4).toUpperCase()}`,
@@ -315,22 +314,45 @@ AUTO SAVE BILL
     try {
       const { id } = req.params;
       const order = await prisma.order.findUnique({ where: { id } });
+      const savedBill =
+        await prisma.bill.findFirst({
+
+          where: {
+            billNo: `BILL-${id.slice(-6)}`
+          }
+
+        });
 
       if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
       // ✅ Yahan hum data ko normalize kar rahe hain taki template ko sahi mile
       const billData = {
+
         ...order,
-        // Database mein 'createdAt' hota hai, 'created_at' nahi
-        created_at: order.createdAt || new Date(),
-        // 'invoiceNo' agar DB mein nahi hai to id se banao
-        invoiceNo: `SLAS-${id.slice(-4).toUpperCase()}`,
-        // ADD THESE
-        customerAddress: order.address || "",
-        customerPincode: order.pincode || "",
-        // 'netAmount' agar missing hai to 'totalAmount' use karo
-        netAmount: order.totalAmount || 0,
-        gstAmount: order.gstAmount || 0
+
+        created_at:
+          order.createdAt || new Date(),
+
+        invoiceNo:
+          savedBill?.invoiceNo ||
+          `SLSJ-INV-${id.slice(-5).toUpperCase()}`,
+
+        billNo:
+          savedBill?.billNo ||
+          `BILL-${id.slice(-6)}`,
+
+        customerAddress:
+          order.address || "",
+
+        customerPincode:
+          order.pincode || "",
+
+        netAmount:
+          order.totalAmount || 0,
+
+        gstAmount:
+          order.gstAmount || 0
+
       };
 
       const html = invoiceHTML({ shop: shopData, bill: billData });
