@@ -194,9 +194,16 @@ export default class OrderController {
         ====================
         */
 
-        const backendUrl = process.env.BACKEND_URL?.trim();
+        const backendUrl =
+
+          process.env.BACKEND_URL ||
+
+          req.protocol +
+          "://" +
+          req.get("host");
 
         billLink =
+
           `${backendUrl}/api/order/bill-pdf/${order.id}`;
 
       }
