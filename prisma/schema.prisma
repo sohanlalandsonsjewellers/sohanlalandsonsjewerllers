@@ -36,7 +36,6 @@ model Product {
   description  String?
   images       Json?     // Normal square/portrait grid display images array
   
-  // 🔥 NEW BANNER PIPELINE INJECTIONS
   isBanner     Boolean  @default(false) // Dynamic banner visibility marker toggle
   bannerImages Json?     // Holds explicit links layout: { desktopUrl: string, mobileUrl: string }
 
