@@ -42,6 +42,7 @@ model Product {
 
   sku          String   @unique
   stock        Int      @default(0)
+  deletedAt    DateTime?   // ← ADD THIS
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 }

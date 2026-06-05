@@ -6,6 +6,7 @@ import { htmlToPdfBuffer } from "../utils/pdfBuffer.js";
 import invoiceHTML from "../utils/invoiceTemplate.js";
 import { shopData } from "../utils/shopConfig.js";
 import dotenv from "dotenv";
+import BillController from "./BillController.js";
 dotenv.config();
 
 export default class OrderController {
@@ -91,21 +92,44 @@ export default class OrderController {
   }
 
   // OrderController.ts - updateOrderStatus update karo
-  // OrderController.ts mein updateOrderStatus method
-  static async updateOrderStatus(req: Request, res: Response) {
+  static async updateOrderStatus(
+    req: Request,
+    res: Response
+  ) {
+
     try {
+
       const { id } = req.params;
       const { status } = req.body;
 
-      const order = await prisma.order.update({
-        where: { id },
-        data: { status }
-      });
+      const order =
+        await prisma.order.update({
+
+          where: {
+            id
+          },
+
+          data: {
+            status
+          }
+
+        });
 
       let billLink = "";
-      if (status === "ACCEPTED") {
 
-        for (const item of order.items as any[]) {
+      if (
+        status === "ACCEPTED"
+      ) {
+
+        /*
+        ====================
+        STOCK REDUCE
+        ====================
+        */
+
+        for (
+          const item of order.items as any[]
+        ) {
 
           const product =
             await prisma.product.findFirst({
@@ -114,27 +138,37 @@ export default class OrderController {
                 sku: item.sku
               }
 
-            })
+            });
 
-          if (!product) continue
+          if (!product)
+            continue;
 
           const updatedStock =
-
             Math.max(
+
               0,
+
               product.stock -
-              Number(item.qty)
-            )
+
+              Number(
+                item.qty
+              )
+
+            );
 
           await prisma.product.update({
 
             where: {
-              id: product.id
+
+              id:
+                product.id
+
             },
 
             data: {
 
-              stock: updatedStock,
+              stock:
+                updatedStock,
 
               deletedAt:
 
@@ -150,16 +184,51 @@ export default class OrderController {
 
             }
 
-          })
+          });
 
         }
+
+        /*
+        ====================
+        BILL LINK RETURN
+        ====================
+        */
+
+        billLink =
+          `${process.env.BACKEND_URL || "http://localhost:8000"}/api/order/bill-pdf/${order.id}`;
+
       }
 
-      return res.json({ success: true, billLink });
-    } catch (error) {
-      console.error("Order Update Error:", error);
-      return res.status(500).json({ success: false, message: "Server Error" });
+      return res.json({
+
+        success: true,
+
+        billLink
+
+      });
+
     }
+
+    catch (error) {
+
+      console.error(
+        "Order Update Error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+
+          success: false,
+
+          message:
+            "Server Error"
+
+        });
+
+    }
+
   }
 
   static async getOrderBillPdf(req: Request, res: Response) {
