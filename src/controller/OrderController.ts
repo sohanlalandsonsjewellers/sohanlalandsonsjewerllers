@@ -7,6 +7,7 @@ import invoiceHTML from "../utils/invoiceTemplate.js";
 import { shopData } from "../utils/shopConfig.js";
 import dotenv from "dotenv";
 import BillController from "./BillController.js";
+import { Prisma } from "@prisma/client";
 dotenv.config();
 
 export default class OrderController {
@@ -187,6 +188,81 @@ export default class OrderController {
           });
 
         }
+
+        /*
+====================
+AUTO SAVE BILL
+====================
+*/
+
+        // duplicate bill save avoid
+        const existingBill =
+          await prisma.bill.findFirst({
+            where: {
+              billNo: `ORDER-${order.id}`
+            }
+          });
+
+        if (!existingBill) {
+
+          await prisma.bill.create({
+
+            data: {
+
+              billNo: `ORDER-${order.id}`,
+
+              invoiceNo:
+                `SLAS-${order.id.slice(-4).toUpperCase()}`,
+
+              customerName:
+                order.customerName || "Walk-in",
+
+              customerPhone:
+                order.customerPhone || "",
+
+              customerAddress:
+                order.address || "",
+
+              customerPincode:
+                order.pincode || "",
+
+              items:
+                order.items as Prisma.InputJsonValue,
+
+              totalAmount:
+                order.adminPrice || 0,
+
+              discount:
+                order.discount || 0,
+
+              gstPercent: 3,
+
+              cgstPercent: 1.5,
+
+              sgstPercent: 1.5,
+
+              cgstAmount:
+                (order.gstAmount || 0) / 2,
+
+              sgstAmount:
+                (order.gstAmount || 0) / 2,
+
+              gstAmount:
+                order.gstAmount || 0,
+
+              netAmount:
+                order.totalAmount || 0,
+
+              paymentStatus: "pending",
+
+              invoicePdfUrl: null
+
+            }
+
+          });
+
+        }
+
 
         /*
         ====================
