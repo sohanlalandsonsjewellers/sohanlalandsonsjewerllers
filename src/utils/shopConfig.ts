@@ -2,7 +2,7 @@
 
 export const shopData = {
   name: "Sohan Lal And Son's Jewellers",
-  address: "Durga Mandir Road\nSiswa Bazar\nMaharajganj - 273163",
+  address: "Durga Mandir Road, Siswa Bazar, Maharajganj - 273163",
   gst: "09BHCPV5374A1Z8",
   phone: "+91 9682296756",
   email: "sohanlalandsonsjewellers@gmail.com",

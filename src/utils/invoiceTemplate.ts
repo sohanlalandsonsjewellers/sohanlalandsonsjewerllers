@@ -226,13 +226,23 @@ ${new Date(
 
 <div>
 
-Customer:
+Customer Name:
 ${bill.customerName}
 
 <br/>
 
-Phone:
-${bill.customerPhone}
+Phone No:
+${bill.customerPhone || "-"}
+
+<br/>
+
+Address:
+${bill.customerAddress || "-"}
+
+<br/>
+
+Pincode:
+${bill.customerPincode || "-"}
 
 </div>
 
@@ -261,7 +271,7 @@ ${rows}
 
 
 <div class="total">
-  <div>Price: ₹${bill.adminPrice || 0}</div>
+  <div>Price: ₹${bill.adminPrice || bill.totalAmount || 0}</div>
   <div>GST: ₹${bill.gstAmount}</div>
   <div> Discount:₹${discount}</div>
   <div>Shipping: ₹${bill.shippingCharge || 0}</div>

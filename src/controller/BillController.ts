@@ -55,6 +55,8 @@ export default class BillController {
           invoiceNo,
           customerName: payload.customerName || "Walk-in",
           customerPhone: payload.customerPhone || "",
+          customerAddress: payload.customerAddress || "",
+          customerPincode: payload.customerPincode || "",
           customerEmail: payload.customerEmail || null,
           items: payload.items,
           totalAmount,

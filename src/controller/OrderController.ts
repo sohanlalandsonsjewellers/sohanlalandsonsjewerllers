@@ -111,6 +111,8 @@ export default class OrderController {
             invoiceNo: `INV-${id.slice(-4)}`,
             customerName: order.customerName || "Walk-in",
             customerPhone: order.customerPhone || "",
+            customerAddress: order.address || "",
+            customerPincode: order.pincode || "",
             totalAmount: Number(order.totalAmount || 0),
             netAmount: Number(order.totalAmount || 0),
             discount: Number(order.discount || 0),
@@ -150,6 +152,9 @@ export default class OrderController {
         created_at: order.createdAt || new Date(),
         // 'invoiceNo' agar DB mein nahi hai to id se banao
         invoiceNo: `SLAS-${id.slice(-4).toUpperCase()}`,
+        // ADD THESE
+        customerAddress: order.address || "",
+        customerPincode: order.pincode || "",
         // 'netAmount' agar missing hai to 'totalAmount' use karo
         netAmount: order.totalAmount || 0,
         gstAmount: order.gstAmount || 0

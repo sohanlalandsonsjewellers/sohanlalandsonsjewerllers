@@ -52,6 +52,8 @@ model Bill {
   invoiceNo     String
   customerName  String
   customerPhone String
+  customerAddress String?
+  customerPincode String?
   customerEmail String?
   items         Json
   totalAmount   Float
