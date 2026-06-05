@@ -316,7 +316,7 @@ ${header()}
 
 <tr>
 
-<th>#</th>
+<th>S.No.</th>
 <th>ITEM</th>
 <th>QTY</th>
 <th>PRICE</th>
