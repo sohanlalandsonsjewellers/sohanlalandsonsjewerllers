@@ -194,8 +194,10 @@ export default class OrderController {
         ====================
         */
 
+        const backendUrl = process.env.BACKEND_URL?.trim();
+
         billLink =
-          `${process.env.BACKEND_URL || "http://localhost:8000"}/api/order/bill-pdf/${order.id}`;
+          `${backendUrl}/api/order/bill-pdf/${order.id}`;
 
       }
 
