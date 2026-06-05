@@ -104,31 +104,55 @@ export default class OrderController {
 
       let billLink = "";
       if (status === "ACCEPTED") {
-        // 1. BILL SAVE KARO DB MEIN
-        await prisma.bill.create({
-          data: {
-            billNo: `B-${id.slice(-4)}`,
-            invoiceNo: `INV-${id.slice(-4)}`,
-            customerName: order.customerName || "Walk-in",
-            customerPhone: order.customerPhone || "",
-            customerAddress: order.address || "",
-            customerPincode: order.pincode || "",
-            totalAmount: Number(order.totalAmount || 0),
-            netAmount: Number(order.totalAmount || 0),
-            discount: Number(order.discount || 0),
-            gstAmount: Number(order.gstAmount || 0),
-            items: order.items as any,
-            paymentStatus: "pending",
-            gstPercent: 3,         // Default 3% 
-            cgstPercent: 1.5,      // gstPercent / 2
-            sgstPercent: 1.5,      // gstPercent / 2
-            cgstAmount: Number(order.gstAmount || 0) / 2,
-            sgstAmount: Number(order.gstAmount || 0) / 2,
-          }
-        });
 
-        const baseUrl = process.env.BASE_URL;
-        billLink = `${baseUrl}/api/order/bill-pdf/${id}`;
+        for (const item of order.items as any[]) {
+
+          const product =
+            await prisma.product.findFirst({
+
+              where: {
+                sku: item.sku
+              }
+
+            })
+
+          if (!product) continue
+
+          const updatedStock =
+
+            Math.max(
+              0,
+              product.stock -
+              Number(item.qty)
+            )
+
+          await prisma.product.update({
+
+            where: {
+              id: product.id
+            },
+
+            data: {
+
+              stock: updatedStock,
+
+              deletedAt:
+
+                updatedStock === 0
+
+                  ?
+
+                  new Date()
+
+                  :
+
+                  null
+
+            }
+
+          })
+
+        }
       }
 
       return res.json({ success: true, billLink });
