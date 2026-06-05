@@ -1,280 +1,401 @@
-import path from "path";
-import fs from "fs";
-
 export default function invoiceHTML({ shop, bill }: any) {
+  const items = Array.isArray(bill.items) ? bill.items : [];
 
-  const items = Array.isArray(bill.items)
-    ? bill.items
-    : [];
+  const ITEMS_PER_PAGE = 15;
 
-  const subtotal = Number(
-    bill.totalAmount || 0
+  const subtotal = items.reduce(
+    (sum: any, it: any) => sum + Number(it.price || 0) * Number(it.qty || 0),
+    0
   );
 
-  const discount = Number(
-    bill.discount || 0
-  );
-
-  // ==========================
-  // LOAD LOGO FROM PUBLIC
-  // ==========================
-
-  const logoPath = path.resolve(
-    process.cwd(),
-    "public",
-    "Shop.jpg"
-  );
-
-  let logoUrl = "";
-
-  try {
-
-    const imageBuffer =
-      fs.readFileSync(logoPath);
-
-    logoUrl =
-      `data:image/jpeg;base64,${imageBuffer.toString("base64")}`;
-
-  } catch {
-
-    console.log(
-      "Shop logo not found:",
-      logoPath
-    );
-
-  }
-
-  const rows = items.map(
-    (it: any, i: number) => `
-<tr>
-
-<td>${i + 1}</td>
-
-<td>${it.name}</td>
-
-<td>${it.qty}</td>
-
-<td>₹${it.price}</td>
-
-<td>₹${it.price * it.qty}</td>
-
-</tr>
-`
-  ).join("");
-
-  return `
-
-<html>
-
-<head>
-
-<meta charset="UTF-8"/>
-
-<style>
-
-body{
-
-font-family:Arial;
-
-margin:0;
-
-padding:0;
-
-}
-
-.container{
-
-width:800px;
-
-margin:auto;
-
-border:5px solid gold;
-
-padding:20px;
-
-box-sizing:border-box;
-
-}
-
-.header{
-
-text-align:center;
-
-border-bottom:3px solid gold;
-
-padding-bottom:15px;
-
-}
-
-.header img{
-
-width:120px;
-
-height:auto;
-
-margin-bottom:10px;
-
-}
-
-h1{
-
-color:maroon;
-
-margin:0;
-
-}
-
-table{
-
-width:100%;
-
-border-collapse:collapse;
-
-margin-top:20px;
-
-}
-
-th{
-
-background:maroon;
-
-color:gold;
-
-}
-
-th,td{
-
-border:1px solid #ddd;
-
-padding:8px;
-
-font-size:12px;
-
-}
-
-.total{
-
-margin-top:20px;
-
-text-align:right;
-
-}
-
-.net{
-
-font-size:20px;
-
-font-weight:bold;
-
-}
-
-.info{
-
-display:flex;
-
-justify-content:space-between;
-
-margin-top:20px;
-
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="container">
-
-<div class="header">
-
-${logoUrl
-      ? `<img src="${logoUrl}" />`
-      : ""
+  const discount = Number(bill.discount || 0);
+  const gst = Number(bill.gstAmount || 0);
+  const shipping = Number(bill.shippingCharge || 0);
+  const net = Number(bill.netAmount || 0);
+
+  function numberToWords(num: number) {
+    const ones = [
+      "", "One", "Two", "Three", "Four",
+      "Five", "Six", "Seven", "Eight",
+      "Nine", "Ten", "Eleven",
+      "Twelve", "Thirteen",
+      "Fourteen", "Fifteen",
+      "Sixteen", "Seventeen",
+      "Eighteen", "Nineteen",
+    ];
+
+    const tens = [
+      "", "", "Twenty", "Thirty", "Forty",
+      "Fifty", "Sixty", "Seventy", "Eighty", "Ninety",
+    ];
+
+    function convert(n: number): string {
+      if (n < 20) return ones[n];
+      if (n < 100) return tens[Math.floor(n / 10)] + " " + ones[n % 10];
+      if (n < 1000) return ones[Math.floor(n / 100)] + " Hundred " + convert(n % 100);
+      if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand " + convert(n % 1000);
+      if (n < 10000000) return convert(Math.floor(n / 100000)) + " Lakh " + convert(n % 100000);
+      return "";
     }
 
-<h1>
+    return convert(Math.floor(num)) + " Rupees Only";
+  }
 
-Sohan Lal & Sons Jewellers
+  const amountWords = numberToWords(net);
 
-</h1>
+  const pages = [];
+  for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
+    pages.push(items.slice(i, i + ITEMS_PER_PAGE));
+  }
 
-<div>
+  function header() {
+    return `
+      <div class="top">
+        <div class="shop">${shop.name}</div>
+        <div class="tag">Luxury Jewellery Showroom</div>
+        <div class="gst">GSTIN : ${shop.gst}</div>
+        <div class="contact">
+          <div>📍 ${shop.address}</div>
+          <div>📞 ${shop.phone}</div>
+          <div>✉️ ${shop.email}</div>
+        </div>
+      </div>
 
-GSTIN: ${shop.gst}
+      <div class="invoice">
+        <h5>INVOICE</h5>
+      </div>
 
-</div>
+      <div class="flex">
+        <div class="box">
+          <div class="title">Bill To</div>
+          <div><b>Customer:</b> ${bill.customerName}</div>
+          <div><b>Phone:</b> ${bill.customerPhone}</div>
+          <div style="display:flex;gap:4px;"><b style="white-space:nowrap;">Address:</b><span>${bill.customerAddress}</span></div>
+          <div><b>Pincode:</b> ${bill.customerPincode}</div>
+        </div>
+        <div class="box">
+          <div class="title">Invoice Details</div>
+          <div><b>Invoice:</b> ${bill.invoiceNo}</div>
+          <div><b>Bill:</b> ${bill.billNo}</div>
+          <div><b>Date:</b> ${new Date(bill.created_at).toLocaleString()}</div>
+          <div><b>Status:</b> Accepted</div>
+        </div>
+      </div>
+    `;
+  }
 
-</div>
+  function footer(pageNo: number, totalPages: number) {
+    return `
+      <div class="pageFooter">
+        <div class="footerLeft">🌐 Website Here</div>
+        <div class="footerCenter">Page ${pageNo} of ${totalPages}</div>
+        <div class="footerRight">Authorised Signatory</div>
+      </div>
+    `;
+  }
 
+  const htmlPages = pages
+    .map((pageItems: any, pageIndex: number) => {
+      const rows = pageItems
+        .map(
+          (it: any, i: number) => `
+          <tr>
+            <td>${pageIndex * ITEMS_PER_PAGE + i + 1}</td>
+            <td>${it.name}</td>
+            <td>${it.qty}</td>
+            <td>₹${Number(it.price).toFixed(2)}</td>
+            <td>₹${(Number(it.price) * Number(it.qty)).toFixed(2)}</td>
+          </tr>
+        `
+        )
+        .join("");
 
-<div class="info">
+      const lastPage = pageIndex === pages.length - 1;
 
-<div>
+      return `
+        <div class="page">
+          ${header()}
 
-Invoice:
-${bill.invoiceNo}
+          <table>
+            <thead>
+              <tr>
+                <th>S.No.</th>
+                <th>ITEM</th>
+                <th>QTY</th>
+                <th>PRICE</th>
+                <th>AMOUNT</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
 
-<br/>
+          ${
+            lastPage
+              ? `
+            <div class="summary">
+              <div class="words">
+                <h3>Amount In Words</h3>
+                ${amountWords}
+              </div>
+              <div class="totals">
+                <div>Subtotal ₹${subtotal}</div>
+                <div>Discount ₹${discount}</div>
+                <div>GST ₹${gst}</div>
+                <div>Shipping ₹${shipping}</div>
+                <h2>Net ₹${net}</h2>
+              </div>
+            </div>
 
-Date:
-${new Date(
-      bill.created_at
-    ).toLocaleString()}
+            <div class="thank">Thank You For Your Business</div>
 
-</div>
+            <div class="footerArea">
+              <div class="footerCard">
+                <div class="footerTitle">Terms & Conditions</div>
+                <div class="footerItem">• Goods once sold will not be taken back</div>
+                <div class="footerItem">• No exchange policy applicable</div>
+                <div class="footerItem">• Disputes subject to Maharajganj jurisdiction</div>
+              </div>
+              <div class="footerCard">
+                <div class="footerTitle">Payment Information</div>
+                <div class="footerItem">Branch : ${shop.bankBranch}</div>
+                <div class="footerItem">Bank : ${shop.bankName}</div>
+                <div class="footerItem">A/C : ${shop.bankAccount}</div>
+                <div class="footerItem">IFSC : ${shop.ifsc}</div>
+              </div>
+            </div>
+          `
+              : ""
+          }
 
-<div>
+          ${footer(pageIndex + 1, pages.length)}
+        </div>
+      `;
+    })
+    .join("");
 
-Customer:
-${bill.customerName}
+  return `
+    <html>
+      <head>
+        <style>
+          body {
+            margin: 0;
+            font-family: Arial;
+            background: #fafafa;
+          }
 
-<br/>
+          .page {
+            width: 800px;
+            margin: auto;
+            padding: 20px;
+            border: 2px solid #d4a64f;
+            background: white;
+            margin-bottom: 20px;
+            page-break-after: always;
+            position: relative;
+            min-height: 1120px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+          }
 
-Phone:
-${bill.customerPhone}
+          .top {
+            text-align: center;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #d4a64f;
+          }
 
-</div>
+          .shop {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4b0000;
+          }
 
-</div>
+          .tag {
+            font-size: 13px;
+            color: #c49028;
+            letter-spacing: 1px;
+          }
 
+          .gst {
+            font-size: 12px;
+            margin-top: 4px;
+          }
 
-<table>
+          .contact {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 10px;
+            margin-top: 8px;
+          }
 
-<tr>
+          .invoice {
+            font-size: 40px;
+            font-weight: bold;
+            margin: 8px 0;
+            text-align: center;
+            color: #4b0000;
+          }
 
-<th>#</th>
+          .invoice h5 {
+            margin: 0;
+            padding: 0;
+            font-size: inherit;
+            font-weight: inherit;
+            color: inherit;
+          }
 
-<th>Item</th>
+          .flex {
+            display: flex;
+            gap: 12px;
+          }
 
-<th>Qty</th>
+          .box {
+            flex: 1;
+            border: 1px solid #d4a64f;
+            padding: 14px;
+            border-radius: 10px;
+            background: #fffdfa;
+            font-size: 12px;
+            min-width: 0;
+          }
 
-<th>Price</th>
+          .box div {
+            word-break: break-word;
+            overflow-wrap: break-word;
+          }
 
-<th>Amount</th>
+          .title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #4b0000;
+          }
 
-</tr>
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+            border: 1px solid #d4a64f;
+          }
 
-${rows}
+          th {
+            background: #4b0000;
+            color: #f4d38a;
+            padding: 12px 10px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border: 1px solid #d4a64f;
+          }
 
-</table>
+          td {
+            border: 1px solid #d4a64f;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+          }
 
+          .summary {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+          }
 
-<div class="total">
-  <div>Price: ₹${bill.adminPrice || 0}</div>
-  <div>GST: ₹${bill.gstAmount}</div>
-  <div> Discount:₹${discount}</div>
-  <div>Shipping: ₹${bill.shippingCharge || 0}</div>
-  <div class="net">Net Amount: ₹${bill.netAmount.toFixed(2)} </div>
+          .words {
+            flex: 1;
+            border: 1px solid #d4a64f;
+            padding: 14px;
+            border-radius: 10px;
+            background: #fffdfa;
+          }
 
-</div>
+          .totals {
+            width: 250px;
+            border: 1px solid #d4a64f;
+            padding: 14px;
+            border-radius: 10px;
+            background: #fffdfa;
+          }
 
-</div>
+          .thank {
+            font-size: 30px;
+            margin-top: 30px;
+            text-align: center;
+            font-style: italic;
+            font-weight: 600;
+            color: #6b1b1b;
+          }
 
-</body>
+          .thank:after {
+            content: "";
+            display: block;
+            width: 180px;
+            height: 2px;
+            background: #d4a64f;
+            margin: 12px auto;
+          }
 
-</html>
+          .footerArea {
+            display: flex;
+            gap: 20px;
+            margin-top: 25px;
+          }
 
-`;
+          .footerCard {
+            flex: 1;
+            border: 1px solid #d4a64f;
+            padding: 18px;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #fffdf9, #fff7ea);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+          }
 
+          .footerTitle {
+            font-size: 17px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ead5a2;
+            color: #4b0000;
+          }
+
+          .footerItem {
+            font-size: 12px;
+            line-height: 1.8;
+          }
+
+          .pageFooter {
+            position: absolute;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            align-items: center;
+            border-top: 2px solid #d4a64f;
+            padding-top: 10px;
+            font-size: 12px;
+          }
+
+          .footerLeft {
+            text-align: left;
+          }
+
+          .footerCenter {
+            text-align: center;
+            font-weight: bold;
+          }
+
+          .footerRight {
+            text-align: right;
+          }
+        </style>
+      </head>
+      <body>
+        ${htmlPages}
+      </body>
+    </html>
+  `;
 }

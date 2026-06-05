@@ -42,6 +42,7 @@ model Product {
 
   sku          String   @unique
   stock        Int      @default(0)
+  deletedAt    DateTime?   // ← ADD THIS
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 }
@@ -52,6 +53,8 @@ model Bill {
   invoiceNo     String
   customerName  String
   customerPhone String
+  customerAddress String?
+  customerPincode String?
   customerEmail String?
   items         Json
   totalAmount   Float

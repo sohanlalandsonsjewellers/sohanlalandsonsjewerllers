@@ -16,25 +16,25 @@ cloudinary.config({
 function getPublicIdFromUrl(url: string): string | null {
   try {
     if (!url || !url.includes("cloudinary.com")) return null;
-    
+
     // Cloudinary URL structure: .../upload/v12345/folder/subfolder/filename.ext
     const parts = url.split("/upload/");
     if (parts.length < 2) return null;
-    
+
     let path = parts[1]; // e.g., "v1779599409/sohanlal_jewellers/products/z1mgrljflyxrcru1h9ae.webp"
-    
+
     // 1. Version number ("v177...") hatao
     const segments = path.split("/");
     if (segments[0].startsWith("v")) {
-      segments.shift(); 
+      segments.shift();
     }
-    
+
     // 2. Ab bacha "sohanlal_jewellers/products/z1mgrljflyxrcru1h9ae.webp"
     const fullPath = segments.join("/");
-    
+
     // 3. Extension hatao (webp/jpg)
     const publicId = fullPath.substring(0, fullPath.lastIndexOf("."));
-    
+
     return publicId;
   } catch (error) {
     console.error("Error extracting public ID:", error);
@@ -297,6 +297,121 @@ class ProductController {
       console.error("Crash inside Admin Product Delete Engine:", err);
       return res.status(500).json({ success: false, error: err.message });
     }
+  }
+
+  static async removeInternal(
+    productId: string
+  ) {
+
+    const existingProduct =
+
+      await prisma.product.findUnique({
+
+        where: {
+          id: productId
+        }
+
+      })
+
+    if (!existingProduct)
+      return
+
+    const productObj: any =
+      existingProduct
+
+    // PRODUCT IMAGES DELETE
+
+    if (
+      productObj.images &&
+      Array.isArray(productObj.images)
+    ) {
+
+      for (
+        const imgUrl of productObj.images
+      ) {
+
+        const pid =
+          getPublicIdFromUrl(
+            imgUrl
+          )
+
+        if (pid) {
+
+          await cloudinary
+            .uploader
+            .destroy(pid)
+
+        }
+
+      }
+
+    }
+
+    // BANNER DELETE
+
+    if (
+      productObj.bannerImages
+    ) {
+
+      const bannerData =
+        productObj.bannerImages
+
+      if (
+        bannerData?.desktopUrl
+      ) {
+
+        const dPid =
+
+          getPublicIdFromUrl(
+            bannerData.desktopUrl
+          )
+
+        if (dPid) {
+
+          await cloudinary
+            .uploader
+            .destroy(
+              dPid
+            )
+
+        }
+
+      }
+
+      if (
+        bannerData?.mobileUrl
+      ) {
+
+        const mPid =
+
+          getPublicIdFromUrl(
+            bannerData.mobileUrl
+          )
+
+        if (mPid) {
+
+          await cloudinary
+            .uploader
+            .destroy(
+              mPid
+            )
+
+        }
+
+      }
+
+    }
+
+    // FINAL DB DELETE
+
+    await prisma.product.delete({
+
+      where: {
+        id: productId
+      }
+
+    })
+
   }
 
   // ===================================================================
