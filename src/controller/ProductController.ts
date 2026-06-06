@@ -92,30 +92,48 @@ class ProductController {
       let bannerPayload: any = null;
       const isBannerFlag = data.isBanner === 'true' || data.isBanner === true;
 
-      if (isBannerFlag || files?.['desktopBanner'] || files?.['mobileBanner']) {
-        let desktopUrl = files?.['desktopBanner'] ? files['desktopBanner'][0].path : (data.bannerDesktopUrl || null);
-        let mobileUrl = files?.['mobileBanner'] ? files['mobileBanner'][0].path : (data.bannerMobileUrl || null);
+      if (
+        isBannerFlag ||
+        data.bannerDesktopUrl
+      ) {
 
-        if (desktopUrl && desktopUrl.startsWith("data:image")) {
-          const upDesktop = await cloudinary.uploader.upload(desktopUrl, {
-            folder: "sohanlal_jewellers/banners",
-            resource_type: "image"
-          });
-          desktopUrl = upDesktop.secure_url;
+        let bannerUrl =
+          data.bannerDesktopUrl ||
+          data.bannerMobileUrl ||
+          null
+
+        if (
+          bannerUrl &&
+          bannerUrl.startsWith(
+            "data:image"
+          )
+        ) {
+
+          const uploaded =
+            await cloudinary
+              .uploader
+              .upload(
+                bannerUrl,
+                {
+                  folder:
+                    "sohanlal_jewellers/banners",
+                  resource_type:
+                    "image"
+                }
+              )
+
+          bannerPayload = {
+
+            desktopUrl:
+              uploaded.secure_url,
+
+            mobileUrl:
+              uploaded.secure_url
+
+          }
+
         }
 
-        if (mobileUrl && mobileUrl.startsWith("data:image")) {
-          const upMobile = await cloudinary.uploader.upload(mobileUrl, {
-            folder: "sohanlal_jewellers/banners",
-            resource_type: "image"
-          });
-          mobileUrl = upMobile.secure_url;
-        }
-
-        bannerPayload = {
-          desktopUrl,
-          mobileUrl
-        };
       }
 
       const sku = generateSKU(data.name, data.category);
@@ -227,17 +245,91 @@ class ProductController {
 
       // D. PIPELINE CASE 3: INTERCEPT DYNAMIC RESPONSIVE BANNER BASE64 UPDATES IF ANY
       if (updates.bannerImages) {
-        let dUrl = updates.bannerImages.desktopUrl;
-        let mUrl = updates.bannerImages.mobileUrl;
 
-        if (dUrl && dUrl.startsWith("data:image")) {
-          const upDesk = await cloudinary.uploader.upload(dUrl, { folder: "sohanlal_jewellers/banners" });
-          updates.bannerImages.desktopUrl = upDesk.secure_url;
+        const bannerImages =
+          updates.bannerImages as any;
+
+        const currentBanner =
+          currentProduct?.bannerImages as any;
+
+
+        const bannerUrl =
+
+          bannerImages?.desktopUrl ||
+
+          bannerImages?.mobileUrl;
+
+
+        if (
+
+          bannerUrl &&
+
+          typeof bannerUrl === "string" &&
+
+          bannerUrl.startsWith(
+            "data:image"
+          )
+
+        ) {
+
+          if (
+
+            currentBanner?.desktopUrl
+
+          ) {
+
+            const oldId =
+
+              getPublicIdFromUrl(
+
+                currentBanner.desktopUrl
+
+              );
+
+
+            if (oldId) {
+
+              await cloudinary
+                .uploader
+                .destroy(
+                  oldId
+                );
+
+            }
+
+          }
+
+
+          const uploaded =
+
+            await cloudinary
+              .uploader
+              .upload(
+
+                bannerUrl,
+
+                {
+
+                  folder:
+                    "sohanlal_jewellers/banners"
+
+                }
+
+              );
+
+
+          updates.bannerImages = {
+
+            desktopUrl:
+              uploaded.secure_url,
+
+            mobileUrl:
+              uploaded.secure_url
+
+          };
+
         }
-        if (mUrl && mUrl.startsWith("data:image")) {
-          const upMob = await cloudinary.uploader.upload(mUrl, { folder: "sohanlal_jewellers/banners" });
-          updates.bannerImages.mobileUrl = upMob.secure_url;
-        }
+
       }
 
       // Commit finalized clean data fields structure into MongoDB
