@@ -205,6 +205,31 @@ class ProductController {
       if (!currentProduct) {
         return res.status(404).json({ success: false, message: "Product profile not found" });
       }
+      // =====================================
+      // STOCK -> AUTO DELETE TIMER LOGIC
+      // =====================================
+      if (
+        updates.stock !== undefined
+      ) {
+        const newStock =
+          Number(
+            updates.stock
+          );
+        // Stock became zero
+        if (
+          newStock <= 0 &&
+          !currentProduct.deletedAt
+        ) {
+          updates.deletedAt =
+            new Date();
+        }
+        // Stock restored again
+        if (
+          newStock > 0
+        ) { updates.deletedAt =
+            null;
+        }
+      }
 
       // B. PIPELINE CASE 1: CLEANUP UNWANTED/DELETED IMAGES FROM CLOUDINARY
       if (updates.images && Array.isArray(updates.images) && currentProduct.images && Array.isArray(currentProduct.images)) {

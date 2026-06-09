@@ -1,48 +1,84 @@
-import prisma from "../config/db.config.js"
+import prisma from "../config/db.config.js";
 
 import ProductController
-    from "../controller/ProductController.js"
+    from "../controller/ProductController.js";
 
-export async function deleteZeroStockProducts() {
+export async function
+    deleteZeroStockProducts() {
 
-    const yesterday =
+    try {
 
-        new Date(
-            Date.now()
-            -
-            24 * 60 * 60 * 1000
-        )
+        const products =
 
-    const products =
+            await prisma.product.findMany({
 
-        await prisma.product.findMany({
+                where: {
 
-            where: {
+                    stock: 0,
 
-                stock: 0,
-
-                deletedAt: {
-
-                    lte: yesterday
+                    deletedAt: {
+                        not: null
+                    }
 
                 }
 
+            });
+
+        const now =
+            Date.now();
+
+        for (
+            const product
+            of products
+        ) {
+
+            const deletedTime =
+
+                new Date(
+                    product.deletedAt!
+                ).getTime();
+
+            const hoursPassed =
+
+                (
+                    now -
+                    deletedTime
+                )
+                / (
+                    1000 *
+                    60 *
+                    60
+                );
+
+            if (
+                hoursPassed >= 24
+            ) {
+
+                console.log(
+                    "Deleting:",
+                    product.name
+                );
+
+                await ProductController
+                    .removeInternal(
+                        product.id
+                    );
+
             }
 
-        })
+        }
 
-    for (
-        const product of products
-    ) {
+        console.log(
+            "Auto Delete Completed"
+        );
 
-        await ProductController.removeInternal(
-            product.id
-        )
+    } catch (err) {
+
+        console.log(
+            "Auto Delete Error",
+            err
+        );
 
     }
-
-    console.log(
-        "Auto Delete Completed"
-    )
 
 }
