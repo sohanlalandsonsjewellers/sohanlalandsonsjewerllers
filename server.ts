@@ -254,6 +254,28 @@ cron.schedule(
 
 );
 
+//deleted the cron job for testing purposes 10-15 after every second
+
+// cron.schedule(
+
+//   "*/10 * * * * *",
+
+//   async () => {
+
+//     console.log(
+//       "Running Zero Stock Cleanup..."
+//     );
+
+//     await deleteZeroStockProducts();
+
+//     console.log(
+//       "Cleanup Finished"
+//     );
+
+//   }
+
+// )
+
 
 // ===========================
 // 404

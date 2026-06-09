@@ -20,7 +20,7 @@ model User {
   address        String?  @default("") // Defaults to blank string safely
   pincode        String?  @default("")
   alternatePhone String?  @default("")
-  
+  area           String?  @default("") // ✅ Added
   adminRole      Boolean? 
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
@@ -101,4 +101,15 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model UserFeedback {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String?  @db.ObjectId 
+  userName  String
+  area      String
+  pincode   String
+  rating    Int
+  comment   String   // @db.Text hata diya, ye automatically MongoDB mein 'string' store karega
+  createdAt DateTime @default(now()) @db.Date 
 }
