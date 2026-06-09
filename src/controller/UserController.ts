@@ -120,7 +120,8 @@ class UserController {
           email: true,
           phoneNumber: true,
           address: true, // ✅ Ab ye DB se fetch hoga
-          pincode: true  // ✅ Ab ye DB se fetch hoga
+          pincode: true,  // ✅ Ab ye DB se fetch hoga
+          area: true, // ✅ YAHAN AREA ADD KARO!
         }
       });
       return res.json({ success: true, user });

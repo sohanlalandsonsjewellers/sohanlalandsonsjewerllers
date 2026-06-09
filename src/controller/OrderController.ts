@@ -5,9 +5,8 @@ import prisma from "../config/db.config.js";
 import { htmlToPdfBuffer } from "../utils/pdfBuffer.js";
 import invoiceHTML from "../utils/invoiceTemplate.js";
 import { shopData } from "../utils/shopConfig.js";
-import dotenv from "dotenv";
-import BillController from "./BillController.js";
 import { Prisma } from "@prisma/client";
+import dotenv from "dotenv";
 dotenv.config();
 
 export default class OrderController {
