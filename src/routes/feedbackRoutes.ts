@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { submitGuestFeedback, submitAuthFeedback, getAllFeedbacks } from "../controller/feedbackController";
+import { submitGuestFeedback, submitAuthFeedback, getAllFeedbacks, deleteFeedback } from "../controller/feedbackController";
 import authMiddleware from "../middleware/AuthMiddleware";
 
 const router = Router();
@@ -12,5 +12,8 @@ router.post("/submit", authMiddleware, submitAuthFeedback);
 
 // Get All
 router.get("/all", getAllFeedbacks);
+
+//delete feedback by id
+router.delete("/delete/:id", authMiddleware, deleteFeedback);
 
 export default router;
