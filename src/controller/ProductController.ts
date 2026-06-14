@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../config/db.config.js";
 import { generateSKU } from "../utils/generateSKU.js";
 import { v2 as cloudinary } from "cloudinary";
+import { deleteZeroStockProducts } from "../utils/deleteZeroStockProducts.js";
 
 // ===================================================================
 // 🚀 CLOUDINARY CONFIGURATION (DYNAMICALLY CONNECTED TO YOUR .ENV KEYS)
@@ -17,22 +18,17 @@ function getPublicIdFromUrl(url: string): string | null {
   try {
     if (!url || !url.includes("cloudinary.com")) return null;
 
-    // Cloudinary URL structure: .../upload/v12345/folder/subfolder/filename.ext
     const parts = url.split("/upload/");
     if (parts.length < 2) return null;
 
-    let path = parts[1]; // e.g., "v1779599409/sohanlal_jewellers/products/z1mgrljflyxrcru1h9ae.webp"
+    let path = parts[1];
 
-    // 1. Version number ("v177...") hatao
     const segments = path.split("/");
     if (segments[0].startsWith("v")) {
       segments.shift();
     }
 
-    // 2. Ab bacha "sohanlal_jewellers/products/z1mgrljflyxrcru1h9ae.webp"
     const fullPath = segments.join("/");
-
-    // 3. Extension hatao (webp/jpg)
     const publicId = fullPath.substring(0, fullPath.lastIndexOf("."));
 
     return publicId;
@@ -42,13 +38,32 @@ function getPublicIdFromUrl(url: string): string | null {
   }
 }
 
+// ===================================================================
+// 🕒 LAZY CLEANUP TRIGGER (Render free-tier safe)
+// Runs in the background whenever the public shop is visited,
+// since node-cron timers don't fire while the server is asleep.
+// Throttled so it doesn't run on every single request.
+// ===================================================================
+let lastCleanupRun = 0;
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // run at most once per hour
+
+function maybeTriggerLazyCleanup() {
+  const now = Date.now();
+  if (now - lastCleanupRun < CLEANUP_INTERVAL_MS) return;
+  lastCleanupRun = now;
+
+  // Fire and forget — don't block the response
+  deleteZeroStockProducts().catch((err) => {
+    console.error("Lazy cleanup error:", err);
+  });
+}
+
 class ProductController {
 
   // ===================================================================
   // ========================== ADMIN CONTROL OPERATIONS ================
   // ===================================================================
 
-  // 1. CREATE PRODUCT (WITH WEBP BASE64 UPLOAD PIPELINE)
   static async create(req: Request, res: Response) {
     try {
       const data = req.body;
@@ -72,14 +87,13 @@ class ProductController {
           const imgStr = incomingImages[i];
 
           if (imgStr.startsWith("data:image")) {
-            // cloudanary options mein ye add kar do
             const uploadRes = await cloudinary.uploader.upload(imgStr, {
               folder: "sohanlal_jewellers/products",
               resource_type: "image",
-              format: "webp",          // 🚀 Backend se force conversion
-              quality: "auto:good",    // 🚀 Cloudinary ko bolo ki size optimize kare
+              format: "webp",
+              quality: "auto:good",
               transformation: [
-                { width: 800, crop: "limit" } // 🚀 Image 800px se badi nahi hogi
+                { width: 800, crop: "limit" }
               ]
             });
             productImagesUrls.push(uploadRes.secure_url);
@@ -161,7 +175,6 @@ class ProductController {
     }
   }
 
-  // 2. GET ALL PRODUCTS FOR ADMIN GRID LIST MATRIX
   static async getAll(req: Request, res: Response) {
     try {
       const products = await prisma.product.findMany({
@@ -174,7 +187,6 @@ class ProductController {
     }
   }
 
-  // 3. GET SPECIFIC PRODUCT BY ID FOR MODAL BINDING
   static async getById(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -189,18 +201,15 @@ class ProductController {
     }
   }
 
-  // 4. 🔥 FIXED MASTER UPDATE OPERATION (HANDLES BOTH REMOVALS & NEW BASE64 UPLOADS)
   static async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const updates = req.body;
 
-      // Prevent conversion type crashes
       if (updates.price !== undefined) updates.price = Number(updates.price);
       if (updates.stock !== undefined) updates.stock = Number(updates.stock);
       if (updates.weight !== undefined) updates.weight = Number(updates.weight);
 
-      // A. Fetch current database record baseline
       const currentProduct = await prisma.product.findUnique({ where: { id } });
       if (!currentProduct) {
         return res.status(404).json({ success: false, message: "Product profile not found" });
@@ -215,7 +224,6 @@ class ProductController {
           Number(
             updates.stock
           );
-        // Stock became zero
         if (
           newStock <= 0 &&
           !currentProduct.deletedAt
@@ -223,7 +231,6 @@ class ProductController {
           updates.deletedAt =
             new Date();
         }
-        // Stock restored again
         if (
           newStock > 0
         ) { updates.deletedAt =
@@ -231,12 +238,10 @@ class ProductController {
         }
       }
 
-      // B. PIPELINE CASE 1: CLEANUP UNWANTED/DELETED IMAGES FROM CLOUDINARY
       if (updates.images && Array.isArray(updates.images) && currentProduct.images && Array.isArray(currentProduct.images)) {
         const oldImages = currentProduct.images as string[];
         const incomingImages = updates.images as string[];
 
-        // Extract images that existed before but were removed on frontend click
         const removedImages = oldImages.filter(url => !incomingImages.includes(url));
 
         for (const removedUrl of removedImages) {
@@ -248,7 +253,6 @@ class ProductController {
           }
         }
 
-        // C. PIPELINE CASE 2: PROCESS & UPLOAD NEWLY ADDED BASE64 IMAGES DURING EDIT
         const finalizedUrls: string[] = [];
         for (const imgStr of incomingImages) {
           if (imgStr.startsWith("data:image")) {
@@ -259,16 +263,13 @@ class ProductController {
             });
             finalizedUrls.push(uploadRes.secure_url);
           } else {
-            // Keep existing valid HTTPS secure URLs as they are
             finalizedUrls.push(imgStr);
           }
         }
 
-        // Re-assign back clean filtered tracking arrays array loops 
         updates.images = finalizedUrls;
       }
 
-      // D. PIPELINE CASE 3: INTERCEPT DYNAMIC RESPONSIVE BANNER BASE64 UPDATES IF ANY
       if (updates.bannerImages) {
 
         const bannerImages =
@@ -357,7 +358,6 @@ class ProductController {
 
       }
 
-      // Commit finalized clean data fields structure into MongoDB
       const product = await prisma.product.update({
         where: { id },
         data: updates,
@@ -370,7 +370,6 @@ class ProductController {
     }
   }
 
-  // 5. DESTROY REMOVE PIPELINE SYSTEM (POORA PRODUCT DELETE LOGIC WITH FULL WORKSPACE CLEANUP)
   static async remove(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -436,8 +435,6 @@ class ProductController {
     const productObj: any =
       existingProduct
 
-    // PRODUCT IMAGES DELETE
-
     if (
       productObj.images &&
       Array.isArray(productObj.images)
@@ -463,8 +460,6 @@ class ProductController {
       }
 
     }
-
-    // BANNER DELETE
 
     if (
       productObj.bannerImages
@@ -519,8 +514,6 @@ class ProductController {
 
     }
 
-    // FINAL DB DELETE
-
     await prisma.product.delete({
 
       where: {
@@ -537,6 +530,11 @@ class ProductController {
 
   static async getPublicProducts(req: Request, res: Response) {
     try {
+      // 🕒 LAZY CLEANUP: Render free-tier ke server-sleep ke time mein
+      // node-cron timers fire nahi hote. Public shop visit hone par
+      // background mein zero-stock auto-delete check kar lo (throttled).
+      maybeTriggerLazyCleanup();
+
       const { q, category } = req.query;
 
       const normalizeCategory = (cat: any) => {

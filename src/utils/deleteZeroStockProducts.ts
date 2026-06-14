@@ -56,13 +56,31 @@ export async function
 
                 console.log(
                     "Deleting:",
-                    product.name
+                    product.name,
+                    "| deletedAt:",
+                    product.deletedAt,
+                    "| hoursPassed:",
+                    hoursPassed.toFixed(2)
                 );
 
-                await ProductController
-                    .removeInternal(
-                        product.id
+                try {
+
+                    await ProductController
+                        .removeInternal(
+                            product.id
+                        );
+
+                } catch (innerErr) {
+
+                    // Ek product ki failure se baaki products process hone se na ruke
+                    console.error(
+                        "Failed to delete product:",
+                        product.id,
+                        product.name,
+                        innerErr
                     );
+
+                }
 
             }
 
