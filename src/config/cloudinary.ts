@@ -25,7 +25,7 @@ const storage = new CloudinaryStorage({
 // 3. Multer Middleware Generator Export
 export const uploadCloudinary = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB raw image input limit before optimization
+  limits: { fileSize: 2 * 1024 * 1024 }, // Max 2MB raw image input limit before optimization
 });
 
 export { cloudinary };
