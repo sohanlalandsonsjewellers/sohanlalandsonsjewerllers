@@ -102,6 +102,17 @@ export default function invoiceHTML({ shop, bill }: any) {
           <tr>
             <td>${pageIndex * ITEMS_PER_PAGE + i + 1}</td>
             <td>${it.name}</td>
+            <td>${it.category || ""}</td>
+            <td>${it.hsnCode ||
+            (
+              String(it.category || "")
+                .toLowerCase()
+                .includes("1gram")
+                ? "7117"
+                : "7113"
+            )
+            }
+            </td>
             <td>${it.qty}</td>
             <td>₹${Number(it.price).toFixed(2)}</td>
             <td>₹${(Number(it.price) * Number(it.qty)).toFixed(2)}</td>
@@ -121,6 +132,8 @@ export default function invoiceHTML({ shop, bill }: any) {
               <tr>
                 <th>S.No.</th>
                 <th>ITEM</th>
+                <th>CATEGORY</th>
+                <th>HSN/SAC</th>
                 <th>QTY</th>
                 <th>PRICE</th>
                 <th>AMOUNT</th>
@@ -131,9 +144,8 @@ export default function invoiceHTML({ shop, bill }: any) {
             </tbody>
           </table>
 
-          ${
-            lastPage
-              ? `
+          ${lastPage
+          ? `
             <div class="summary">
               <div class="words">
                 <h3>Amount In Words</h3>
@@ -166,8 +178,8 @@ export default function invoiceHTML({ shop, bill }: any) {
               </div>
             </div>
           `
-              : ""
-          }
+          : ""
+        }
 
           ${footer(pageIndex + 1, pages.length)}
         </div>
