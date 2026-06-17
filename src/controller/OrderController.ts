@@ -14,6 +14,24 @@ export default class OrderController {
   static async placeOrder(req: Request, res: Response) {
     try {
       const { items, adminPrice, discount, customerName, customerPhone, address, pincode } = req.body;
+      const enrichedItems = [];
+
+      for (const item of items) {
+
+        const product =
+          await prisma.product.findFirst({
+            where: {
+              sku: item.sku
+            }
+          });
+
+        enrichedItems.push({
+          ...item,
+          category: product?.category || "",
+          hsnCode: product?.hsnCode,
+        });
+
+      }
 
       if (adminPrice === undefined || adminPrice === null) {
         return res.status(400).json({ success: false, message: "Admin Price is missing from frontend!" });
@@ -33,7 +51,7 @@ export default class OrderController {
           customerPhone: customerPhone,
           address: address,
           pincode: pincode,
-          items: items,
+          items: enrichedItems,
           adminPrice: priceNum,
           gstAmount: gst,
           shippingCharge: shipping,
