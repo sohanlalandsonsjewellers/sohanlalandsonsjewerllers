@@ -1,7 +1,7 @@
-import path from "path";
-import fs from "fs";
+import axios from "axios";
 import { Request, Response } from "express";
 import prisma from "../config/db.config.js";
+import NimbusService from "../services/NimbusService";
 import { htmlToPdfBuffer } from "../utils/pdfBuffer.js";
 import invoiceHTML from "../utils/invoiceTemplate.js";
 import { shopData } from "../utils/shopConfig.js";
@@ -10,28 +10,70 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export default class OrderController {
+  private static async getLocationFromPincode(
+    pincode: string
+  ) {
+
+    try {
+
+      const { data } = await axios.get(
+        `https://api.postalpincode.in/pincode/${pincode}`
+      );
+
+      if (
+        data[0]?.Status === "Success" &&
+        data[0]?.PostOffice?.length
+      ) {
+
+        const office =
+          data[0].PostOffice[0];
+
+        return {
+
+          city:
+            office.District,
+
+          state:
+            office.State
+
+        };
+
+      }
+
+    } catch (err) {
+
+      console.error(
+        "Pincode lookup failed:",
+        err
+      );
+
+    }
+
+    return {
+
+      city: "",
+
+      state: ""
+
+    };
+
+  }
 
   static async placeOrder(req: Request, res: Response) {
     try {
-      const { items, adminPrice, discount, customerName, customerPhone, address, pincode } = req.body;
-      const enrichedItems = [];
-
-      for (const item of items) {
-
-        const product =
-          await prisma.product.findFirst({
-            where: {
-              sku: item.sku
-            }
-          });
-
-        enrichedItems.push({
-          ...item,
-          category: product?.category || "",
-          hsnCode: product?.hsnCode,
-        });
-
-      }
+      // const { items, adminPrice, discount, customerName, customerPhone, address, pincode } = req.body;
+      const {
+        items,
+        adminPrice,
+        discount,
+        customerName,
+        customerPhone,
+        address,
+        pincode,
+        shippingCharge,
+        courierId,
+        courierName
+      } = req.body;
 
       if (adminPrice === undefined || adminPrice === null) {
         return res.status(400).json({ success: false, message: "Admin Price is missing from frontend!" });
@@ -41,23 +83,48 @@ export default class OrderController {
       const priceNum = Number(adminPrice);
       const discNum = Number(discount || 0);
       const gst = priceNum * 0.03;
-      const shipping = (pincode === "273164") ? 50 : 100;
-      const total = (priceNum - discNum) + gst + shipping;
+
+      const shipping =
+        Number(shippingCharge || 0);
+
+      const total =
+        (priceNum - discNum) +
+        gst +
+        shipping;
 
       const newOrder = await prisma.order.create({
         data: {
+
           userId: userAuth.id,
-          customerName: customerName,
-          customerPhone: customerPhone,
-          address: address,
-          pincode: pincode,
-          items: enrichedItems,
+
+          customerName,
+
+          customerPhone,
+
+          address,
+
+          pincode,
+
+          items,
+
           adminPrice: priceNum,
+
           gstAmount: gst,
+
           shippingCharge: shipping,
+
           discount: discNum,
+
           totalAmount: total,
+
+          courierId: courierId
+            ? Number(courierId)
+            : null,
+
+          courierName: courierName || null,
+
           status: "PENDING"
+
         }
       });
 
@@ -109,6 +176,111 @@ export default class OrderController {
     return res.json({ success: true, orders });
   }
 
+  // =============================
+// Refresh Shipment Tracking
+// =============================
+
+static async refreshTracking(
+  req: Request,
+  res: Response
+) {
+
+  try {
+
+    const userId = (req as any).user.id;
+
+    const orders = await prisma.order.findMany({
+
+      where: {
+
+        userId,
+
+        awbNumber: {
+
+          not: null
+
+        }
+
+      }
+
+    });
+
+    for (const order of orders) {
+
+      try {
+
+        const tracking =
+          await NimbusService.trackShipment(
+            order.awbNumber!
+          );
+
+        const shipment =
+          tracking.data;
+
+        await prisma.order.update({
+
+          where: {
+
+            id: order.id
+
+          },
+
+          data: {
+
+            shipmentStatus:
+
+              shipment.current_status_name ||
+
+              shipment.current_status ||
+
+              order.shipmentStatus
+
+          }
+
+        });
+
+      }
+
+      catch (err) {
+
+        console.error(
+
+          `Tracking failed for ${order.awbNumber}`,
+
+          err
+
+        );
+
+      }
+
+    }
+
+    return res.json({
+
+      success: true,
+
+      message: "Tracking refreshed."
+
+    });
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+
+      success: false,
+
+      message: "Unable to refresh tracking."
+
+    });
+
+  }
+
+}
+
   // OrderController.ts - updateOrderStatus update karo
   static async updateOrderStatus(
     req: Request,
@@ -134,6 +306,130 @@ export default class OrderController {
         });
 
       let billLink = "";
+      /*
+====================
+CREATE SHIPMENT
+====================
+*/
+
+      const location =
+        await OrderController.getLocationFromPincode(
+          order.pincode
+        );
+
+      if (!order.awbNumber) {
+
+        const shipment =
+          await NimbusService.createShipment({
+
+            order_number:
+              `SLAS-${order.id.slice(-6).toUpperCase()}`,
+
+            payment_type: "prepaid",
+
+            order_amount: order.totalAmount,
+
+            shipping_charges: order.shippingCharge,
+
+            discount: order.discount || 0,
+
+            cod_charges: 0,
+
+            package_weight: 200,
+
+            package_length: 10,
+
+            package_breadth: 10,
+
+            package_height: 10,
+
+            request_auto_pickup: "yes",
+
+            consignee: {
+
+              name: order.customerName,
+
+              address: order.address,
+
+              city: location.city,
+
+              state: location.state,
+
+              pincode: order.pincode,
+
+              phone: order.customerPhone
+
+            },
+
+            pickup: {
+
+              warehouse_name: process.env.NIMBUS_WAREHOUSE_NAME,
+
+              name: process.env.NIMBUS_PICKUP_NAME,
+
+              address: process.env.NIMBUS_PICKUP_ADDRESS,
+
+              address_2: process.env.NIMBUS_PICKUP_ADDRESS2,
+
+              city: process.env.NIMBUS_PICKUP_CITY,
+
+              state: process.env.NIMBUS_PICKUP_STATE,
+
+              pincode: process.env.NIMBUS_PICKUP_PINCODE,
+
+              phone: process.env.NIMBUS_PICKUP_PHONE
+
+            },
+
+            order_items: (order.items as any[]).map(item => ({
+
+              name: item.name,
+
+              qty: String(item.qty),
+
+              price: String(item.price),
+
+              sku: item.sku
+
+            })),
+
+            courier_id: order.courierId,
+
+            is_insurance: 0
+
+          });
+
+        await prisma.order.update({
+
+          where: {
+            id: order.id
+          },
+
+          data: {
+
+            shipmentId:
+              String(shipment.data.shipment_id),
+
+            awbNumber:
+              shipment.data.awb_number,
+
+            courierName:
+              shipment.data.courier_name,
+
+            shipmentStatus:
+              shipment.data.status,
+
+            labelUrl:
+              shipment.data.label,
+
+            trackingUrl:
+              `https://ship.nimbuspost.com/tracking/${shipment.data.awb_number}`
+
+          }
+
+        });
+
+      }
 
       if (
         status === "ACCEPTED"
@@ -295,11 +591,26 @@ AUTO SAVE BILL
 
       }
 
+      const updatedOrder = await prisma.order.findUnique({
+        where: {
+          id: order.id
+        }
+      });
       return res.json({
 
         success: true,
 
-        billLink
+        billLink,
+
+        shipment: updatedOrder
+          ? {
+            awbNumber: updatedOrder.awbNumber,
+            courierName: updatedOrder.courierName,
+            trackingUrl: updatedOrder.trackingUrl,
+            shipmentStatus: updatedOrder.shipmentStatus,
+            labelUrl: updatedOrder.labelUrl
+          }
+          : null
 
       });
 

@@ -43,6 +43,10 @@ model Product {
   sku          String   @unique
   stock        Int      @default(0)
   deletedAt    DateTime?   // ← ADD THIS
+  length Float? @default(10)
+  breadth Float? @default(10)
+  height Float? @default(10)
+  hsnCode String? @default("7117")
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 }
@@ -84,15 +88,24 @@ model Order {
   address       String
   pincode       String
   items         Json
-  
-  // ✅ Billing Calculation Fields (Server-side handled)
-  adminPrice     Float?    // Product ka base price
-  gstAmount      Float?    // 3% of adminPrice
-  shippingCharge Float?    // Dynamic based on pincode
-  discount       Float?    @default(0)
-  totalAmount    Float?    // Final = (adminPrice - discount) + gst + shipping
-  status        String   @default("PENDING")
-  createdAt     DateTime @default(now())
+  adminPrice     Float?
+  gstAmount      Float?
+  shippingCharge Float?
+  discount       Float? @default(0)
+  totalAmount    Float?
+  status         String @default("PENDING")
+
+  // Nimbus Shipping
+
+  courierId      Int?
+  courierName    String?
+  shipmentId     String?
+  awbNumber      String?
+  trackingUrl    String?
+  labelUrl       String?
+  manifestUrl    String?
+  shipmentStatus String? @default("NOT_CREATED")
+  createdAt DateTime @default(now())
 }
 
 model Notification {
