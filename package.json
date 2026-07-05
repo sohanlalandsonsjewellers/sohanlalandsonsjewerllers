@@ -21,7 +21,7 @@
     "@sparticuz/chromium": "^149.0.0",
     "axios": "^1.18.1",
     "bcrypt": "^5.1.1",
-    "cloudinary": "^2.10.0",
+    "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "env-cmd": "^10.1.0",
