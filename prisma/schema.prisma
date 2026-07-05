@@ -46,7 +46,6 @@ model Product {
   length Float? @default(10)
   breadth Float? @default(10)
   height Float? @default(10)
-  hsnCode String? @default("7117")
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 }
