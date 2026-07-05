@@ -16,7 +16,7 @@ router.delete("/delete/:id", authMiddleware, verifyAdmin, OrderController.delete
 // (User only)
 // (User only)
 router.get("/my-orders", authMiddleware, OrderController.getMyOrders);
-
+router.post("/refresh-tracking",authMiddleware,OrderController.refreshTracking);
 // ✅ FIX: Notifications ke liye GET request honi chahiye
 router.get("/notifications/my", authMiddleware, OrderController.getMyNotifications);
 // ✅ Admin status update ke liye PUT request
