@@ -248,9 +248,39 @@ export default class BillController {
   // ===========================================================
   // EXPORT BILL EXCEL (BASE64 ONLY - NO FILE SAVING)
   // ===========================================================
+  // ===========================================================
+  // EXPORT BILL EXCEL (MONTH/YEAR FILTER SUPPORT)
+  // ===========================================================
   static async exportExcel(req: Request, res: Response) {
     try {
+
       console.log("📤 EXPORT EXCEL STARTED");
+
+      const { month, year } = req.query;
+
+      let where: any = {};
+
+      if (month && year) {
+
+        const startDate = new Date(
+          Number(year),
+          Number(month) - 1,
+          1
+        );
+
+        const endDate = new Date(
+          Number(year),
+          Number(month),
+          1
+        );
+
+        where = {
+          created_at: {
+            gte: startDate,
+            lt: endDate,
+          },
+        };
+      }
 
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Bills");
@@ -270,7 +300,10 @@ export default class BillController {
       ];
 
       const bills = await prisma.bill.findMany({
-        orderBy: { created_at: "desc" },
+        where,
+        orderBy: {
+          created_at: "desc",
+        },
       });
 
       bills.forEach((b) => {
@@ -292,23 +325,35 @@ export default class BillController {
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
-      const excelBase64 = Buffer.from(buffer).toString("base64");
 
-      console.log("✅ EXPORT SUCCESS");
+      const excelBase64 =
+        Buffer.from(buffer).toString("base64");
+
+      console.log(
+        `✅ EXPORT SUCCESS (${bills.length} Bills)`
+      );
 
       return res.json({
         success: true,
-        fileName: "Bills.xlsx",
+        fileName:
+          month && year
+            ? `Bills-${month}-${year}.xlsx`
+            : "Bills.xlsx",
         excelBase64,
       });
+
     } catch (err) {
-      console.error("❌ EXPORT ERROR:", err);
+
+      console.error(
+        "❌ EXPORT ERROR:",
+        err
+      );
 
       return res.status(500).json({
         success: false,
         message: "Export failed",
-        // error: err.message,
       });
+
     }
   }
 

@@ -152,11 +152,40 @@ class ProductController {
 
       const sku = generateSKU(data.name, data.category);
 
+      let hsnCode = "7117";
+
+      if (
+        String(data.category)
+          .toLowerCase()
+          .includes("gold")
+      ) {
+        hsnCode = "7113";
+      }
+
+      if (
+        String(data.category)
+          .toLowerCase()
+          .includes("silver")
+      ) {
+        hsnCode = "7113";
+      }
+
+      if (
+        String(data.category)
+          .toLowerCase()
+          .includes("1gram")
+      ) {
+        hsnCode = "7117";
+      }
+
       const product = await prisma.product.create({
         data: {
           name: data.name,
           category: data.category,
           subCategory: data.subCategory || "Women",
+
+          hsnCode,
+
           price: Number(data.price),
           weight: Number(data.weight || 0),
           description: data.description || "",
@@ -206,24 +235,63 @@ class ProductController {
       const { id } = req.params;
       const updates = req.body;
 
-      if (updates.price !== undefined) updates.price = Number(updates.price);
-      if (updates.stock !== undefined) updates.stock = Number(updates.stock);
-      if (updates.weight !== undefined) updates.weight = Number(updates.weight);
+      // ============================
+      // AUTO HSN CODE MAPPING
+      // ============================
+      if (updates.category) {
 
-      const currentProduct = await prisma.product.findUnique({ where: { id } });
-      if (!currentProduct) {
-        return res.status(404).json({ success: false, message: "Product profile not found" });
+        const category =
+          String(updates.category).toLowerCase();
+
+        if (category.includes("1gram")) {
+          updates.hsnCode = "7117";
+        }
+
+        else if (
+          category.includes("gold")
+        ) {
+          updates.hsnCode = "7113";
+        }
+
+        else if (
+          category.includes("silver")
+        ) {
+          updates.hsnCode = "7113";
+        }
+
       }
+
+      if (updates.price !== undefined)
+        updates.price = Number(updates.price);
+
+      if (updates.stock !== undefined)
+        updates.stock = Number(updates.stock);
+
+      if (updates.weight !== undefined)
+        updates.weight = Number(updates.weight);
+
+      const currentProduct =
+        await prisma.product.findUnique({
+          where: { id }
+        });
+
+      if (!currentProduct) {
+        return res.status(404).json({
+          success: false,
+          message: "Product profile not found"
+        });
+      }
+
       // =====================================
       // STOCK -> AUTO DELETE TIMER LOGIC
       // =====================================
       if (
         updates.stock !== undefined
       ) {
+
         const newStock =
-          Number(
-            updates.stock
-          );
+          Number(updates.stock);
+
         if (
           newStock <= 0 &&
           !currentProduct.deletedAt
@@ -231,46 +299,115 @@ class ProductController {
           updates.deletedAt =
             new Date();
         }
+
         if (
           newStock > 0
-        ) { updates.deletedAt =
+        ) {
+          updates.deletedAt =
             null;
         }
       }
 
-      if (updates.images && Array.isArray(updates.images) && currentProduct.images && Array.isArray(currentProduct.images)) {
-        const oldImages = currentProduct.images as string[];
-        const incomingImages = updates.images as string[];
+      if (
+        updates.images &&
+        Array.isArray(updates.images) &&
+        currentProduct.images &&
+        Array.isArray(currentProduct.images)
+      ) {
 
-        const removedImages = oldImages.filter(url => !incomingImages.includes(url));
+        const oldImages =
+          currentProduct.images as string[];
+
+        const incomingImages =
+          updates.images as string[];
+
+        const removedImages =
+          oldImages.filter(
+            url =>
+              !incomingImages.includes(url)
+          );
 
         for (const removedUrl of removedImages) {
-          const pid = getPublicIdFromUrl(removedUrl);
-          console.log("➡️ UPDATE TRACE: CLEANING REMOVED IMAGE:", pid);
+
+          const pid =
+            getPublicIdFromUrl(
+              removedUrl
+            );
+
+          console.log(
+            "➡️ UPDATE TRACE: CLEANING REMOVED IMAGE:",
+            pid
+          );
+
           if (pid) {
-            const delLog = await cloudinary.uploader.destroy(pid);
-            console.log("💥 UPDATE TRACE: DESTROY ACTION RESPONSE:", delLog);
+
+            const delLog =
+              await cloudinary
+                .uploader
+                .destroy(pid);
+
+            console.log(
+              "💥 UPDATE TRACE: DESTROY ACTION RESPONSE:",
+              delLog
+            );
+
           }
+
         }
 
         const finalizedUrls: string[] = [];
-        for (const imgStr of incomingImages) {
-          if (imgStr.startsWith("data:image")) {
-            console.log("🚀 UPDATE TRACE: UPLOADING NEW IMAGES ADDED IN EDIT MODE...");
-            const uploadRes = await cloudinary.uploader.upload(imgStr, {
-              folder: "sohanlal_jewellers/products",
-              resource_type: "image"
-            });
-            finalizedUrls.push(uploadRes.secure_url);
-          } else {
-            finalizedUrls.push(imgStr);
+
+        for (
+          const imgStr of incomingImages
+        ) {
+
+          if (
+            imgStr.startsWith(
+              "data:image"
+            )
+          ) {
+
+            console.log(
+              "🚀 UPDATE TRACE: UPLOADING NEW IMAGES ADDED IN EDIT MODE..."
+            );
+
+            const uploadRes =
+              await cloudinary
+                .uploader
+                .upload(
+                  imgStr,
+                  {
+                    folder:
+                      "sohanlal_jewellers/products",
+                    resource_type:
+                      "image"
+                  }
+                );
+
+            finalizedUrls.push(
+              uploadRes.secure_url
+            );
+
           }
+
+          else {
+
+            finalizedUrls.push(
+              imgStr
+            );
+
+          }
+
         }
 
-        updates.images = finalizedUrls;
+        updates.images =
+          finalizedUrls;
+
       }
 
-      if (updates.bannerImages) {
+      if (
+        updates.bannerImages
+      ) {
 
         const bannerImages =
           updates.bannerImages as any;
@@ -278,13 +415,11 @@ class ProductController {
         const currentBanner =
           currentProduct?.bannerImages as any;
 
-
         const bannerUrl =
 
           bannerImages?.desktopUrl ||
 
           bannerImages?.mobileUrl;
-
 
         if (
 
@@ -299,19 +434,13 @@ class ProductController {
         ) {
 
           if (
-
             currentBanner?.desktopUrl
-
           ) {
 
             const oldId =
-
               getPublicIdFromUrl(
-
                 currentBanner.desktopUrl
-
               );
-
 
             if (oldId) {
 
@@ -325,24 +454,16 @@ class ProductController {
 
           }
 
-
           const uploaded =
-
             await cloudinary
               .uploader
               .upload(
-
                 bannerUrl,
-
                 {
-
                   folder:
                     "sohanlal_jewellers/banners"
-
                 }
-
               );
-
 
           updates.bannerImages = {
 
@@ -358,15 +479,28 @@ class ProductController {
 
       }
 
-      const product = await prisma.product.update({
-        where: { id },
-        data: updates,
+      const product =
+        await prisma.product.update({
+          where: { id },
+          data: updates,
+        });
+
+      return res.json({
+        success: true,
+        product
       });
 
-      return res.json({ success: true, product });
     } catch (err) {
-      console.error("Crash logs inside Admin Product Update Engine:", err);
-      return res.status(500).json({ success: false });
+
+      console.error(
+        "Crash logs inside Admin Product Update Engine:",
+        err
+      );
+
+      return res.status(500).json({
+        success: false
+      });
+
     }
   }
 
@@ -585,20 +719,56 @@ class ProductController {
     }
   }
 
-  static async getPublicProductById(req: Request, res: Response) {
+  static async getPublicProductById(
+    req: Request,
+    res: Response
+  ) {
     try {
+
       const { id } = req.params;
-      const product = await prisma.product.findUnique({
-        where: { id },
-        select: { id: true, name: true, price: true, images: true, description: true, category: true, sku: true, weight: true }
-      });
+
+      const product =
+        await prisma.product.findUnique({
+
+          where: { id },
+
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            images: true,
+            description: true,
+            category: true,
+            sku: true,
+            weight: true,
+            hsnCode: true
+          }
+
+        });
+
       if (!product) {
-        return res.status(404).json({ success: false, message: "Asset profile not active" });
+
+        return res.status(404).json({
+          success: false,
+          message:
+            "Asset profile not active"
+        });
+
       }
-      return res.json({ success: true, product });
+
+      return res.json({
+        success: true,
+        product
+      });
+
     } catch (err) {
+
       console.error(err);
-      return res.status(500).json({ success: false });
+
+      return res.status(500).json({
+        success: false
+      });
+
     }
   }
 

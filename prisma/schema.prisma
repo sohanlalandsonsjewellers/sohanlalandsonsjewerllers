@@ -38,6 +38,7 @@ model Product {
   
   isBanner     Boolean  @default(false) // Dynamic banner visibility marker toggle
   bannerImages Json?     // Holds explicit links layout: { desktopUrl: string, mobileUrl: string }
+  hsnCode      String?   @default("7117") // 👈 NEW
 
   sku          String   @unique
   stock        Int      @default(0)
