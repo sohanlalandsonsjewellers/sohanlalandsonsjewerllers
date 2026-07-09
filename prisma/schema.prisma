@@ -126,3 +126,40 @@ model UserFeedback {
   comment   String   // @db.Text hata diya, ye automatically MongoDB mein 'string' store karega
   createdAt DateTime @default(now()) @db.Date 
 }
+
+
+enum EventType {
+  LOGIN
+  LOGOUT
+  PRODUCT_VIEW
+  PRODUCT_CLICK
+  SEARCH
+  ADD_TO_CART
+  REMOVE_FROM_CART
+  ADD_TO_WISHLIST
+  REMOVE_FROM_WISHLIST
+  ORDER_CREATED
+  ORDER_CANCELLED
+  ORDER_DELIVERED
+}
+
+model Event {
+
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  eventType   EventType
+  userId      String?     @db.ObjectId
+  productId   String?     @db.ObjectId
+  orderId      String?    @db.ObjectId
+  sessionId    String?
+  ipAddress    String?
+  device       String?
+  browser      String?
+  os           String?
+  page         String?
+  metadata     Json?
+  createdAt    DateTime   @default(now())
+  @@index([userId])
+  @@index([productId])
+  @@index([eventType])
+  @@index([createdAt])
+}

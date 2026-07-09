@@ -193,6 +193,26 @@ MongoDB does NOT use migration system.
 
 ---
 
+
+# Analytics Module
+
+Responsible for collecting user behaviour.
+
+Current Features
+
+- Product View
+- Search
+- Cart
+- Wishlist
+- Orders
+
+Future
+
+- Recommendation Dataset
+- Customer Segmentation
+- Sales Forecast
+- AI Personalization
+
 ## 🧾 License
 Private & Proprietary — Developed for **Sohan Lal and Sons Jewellers (SLSJ)**.
 
