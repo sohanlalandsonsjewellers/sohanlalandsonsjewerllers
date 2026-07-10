@@ -68,4 +68,308 @@ export default class AnalyticsController {
 
   }
 
+  static async dashboardSummary(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days =
+        Number(req.query.days) || 7;
+
+      const summary =
+        await AnalyticsService.getDashboardSummary(days);
+
+      return res.status(200).json({
+
+        success: true,
+
+        summary
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Dashboard Summary Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch dashboard summary."
+
+      });
+
+    }
+
+  }
+
+  static async topProducts(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days =
+        Number(req.query.days) || 7;
+
+      const products =
+        await AnalyticsService.getTopProducts(days);
+
+      return res.status(200).json({
+
+        success: true,
+
+        products
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Top Products Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch top products."
+
+      });
+
+    }
+
+  }
+
+  static async conversionFunnel(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days =
+        Number(req.query.days) || 7;
+
+      const funnel =
+        await AnalyticsService.getConversionFunnel(days);
+
+      return res.status(200).json({
+
+        success: true,
+
+        funnel
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(error);
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch conversion funnel."
+
+      });
+
+    }
+
+  }
+
+  static async searchAnalytics(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days =
+        Number(req.query.days) || 7;
+
+      const searches =
+        await AnalyticsService.getSearchAnalytics(days);
+
+      return res.status(200).json({
+
+        success: true,
+
+        searches
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Search Analytics Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch search analytics."
+
+      });
+
+    }
+
+  }
+
+  static async dailyAnalytics(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days =
+        Number(req.query.days ?? 7);
+
+      const analytics =
+        await AnalyticsService.getDailyAnalytics(days);
+
+      return res.status(200).json({
+
+        success: true,
+
+        analytics
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Daily Analytics Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch daily analytics."
+
+      });
+
+    }
+
+  }
+
+  static async realtimeAnalytics(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const realtime =
+        await AnalyticsService.getRealtimeAnalytics();
+
+      return res.status(200).json({
+
+        success: true,
+
+        realtime
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Realtime Analytics Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch realtime analytics."
+
+      });
+
+    }
+
+  }
+
+  static async overview(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days = Number(req.query.days);
+
+      const safeDays =
+        Number.isNaN(days)
+          ? 7
+          : Math.min(
+            Math.max(days, 1),
+            365
+          );
+
+      const overview =
+        await AnalyticsService.getOverview(
+          safeDays
+        );
+
+      return res.status(200).json({
+
+        success: true,
+
+        overview
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Overview Analytics Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch analytics overview."
+
+      });
+
+    }
+
+  }
+
 }
