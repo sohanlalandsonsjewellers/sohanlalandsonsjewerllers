@@ -6,6 +6,7 @@ import billRoutes from "./billRoutes.js";
 import orderRoutes from "./orderRoutes";
 import feedbackRoutes from "./feedbackRoutes";
 import shippingRoutes from "./shippingRoutes";
+import analyticsRoutes from "../analytics/routes/analyticsRoutes.js";
 
 const router = Router();
 
@@ -16,6 +17,6 @@ router.use("/api/bill", billRoutes);
 router.use("/api/order", orderRoutes);
 router.use("/api/feedback", feedbackRoutes);
 router.use("/api/shipping", shippingRoutes);
-
+router.use("/api/analytics",analyticsRoutes);
 
 export default router;
