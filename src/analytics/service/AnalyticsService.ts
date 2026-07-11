@@ -1009,4 +1009,661 @@ export default class AnalyticsService {
     };
   }
 
+  static async getBusinessDashboard() {
+
+    const now = new Date();
+
+    // ---------------- TODAY ----------------
+
+    const startOfToday = new Date(now);
+
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // ---------------- MONTH ----------------
+
+    const startOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1
+    );
+
+    // =====================================================
+    // BILL STATISTICS
+    // =====================================================
+
+    const [
+
+      todayBills,
+
+      monthBills,
+
+      totalBills
+
+    ] = await Promise.all([
+
+      prisma.bill.findMany({
+
+        where: {
+
+          created_at: {
+
+            gte: startOfToday
+
+          }
+
+        },
+
+        select: {
+
+          netAmount: true
+
+        }
+
+      }),
+
+      prisma.bill.findMany({
+
+        where: {
+
+          created_at: {
+
+            gte: startOfMonth
+
+          }
+
+        },
+
+        select: {
+
+          netAmount: true
+
+        }
+
+      }),
+
+      prisma.bill.findMany({
+
+        select: {
+
+          netAmount: true
+
+        }
+
+      })
+
+    ]);
+
+    const todayRevenue =
+
+      todayBills.reduce(
+
+        (sum, bill) =>
+
+          sum + bill.netAmount,
+
+        0
+
+      );
+
+    const monthRevenue =
+
+      monthBills.reduce(
+
+        (sum, bill) =>
+
+          sum + bill.netAmount,
+
+        0
+
+      );
+
+    const totalRevenue =
+
+      totalBills.reduce(
+
+        (sum, bill) =>
+
+          sum + bill.netAmount,
+
+        0
+
+      );
+
+    // =====================================================
+    // ORDER STATISTICS
+    // =====================================================
+
+    const [
+
+      todayOrders,
+
+      monthOrders,
+
+      totalOrders,
+
+      pendingOrders,
+
+      acceptedOrders,
+
+      deliveredOrders,
+
+      cancelledOrders
+
+    ] = await Promise.all([
+
+      prisma.order.count({
+
+        where: {
+
+          createdAt: {
+
+            gte: startOfToday
+
+          }
+
+        }
+
+      }),
+
+      prisma.order.count({
+
+        where: {
+
+          createdAt: {
+
+            gte: startOfMonth
+
+          }
+
+        }
+
+      }),
+
+      prisma.order.count(),
+
+      prisma.order.count({
+
+        where: {
+
+          status: "PENDING"
+
+        }
+
+      }),
+
+      prisma.order.count({
+
+        where: {
+
+          status: "ACCEPTED"
+
+        }
+
+      }),
+
+      prisma.order.count({
+
+        where: {
+
+          status: "DELIVERED"
+
+        }
+
+      }),
+
+      prisma.order.count({
+
+        where: {
+
+          status: "CANCELLED"
+
+        }
+
+      })
+
+    ]);
+
+    // =====================================================
+    // AVERAGE ORDER VALUE
+    // =====================================================
+
+    const averageOrderValue =
+
+      totalBills.length > 0
+
+        ? Number(
+
+          (
+
+            totalRevenue /
+
+            totalBills.length
+
+          ).toFixed(2)
+
+        )
+
+        : 0;
+
+    // =====================================================
+    // RESPONSE
+    // =====================================================
+
+    return {
+
+      todayRevenue: Number(todayRevenue.toFixed(2)),
+      monthRevenue: Number(monthRevenue.toFixed(2)),
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      todayBills:
+
+        todayBills.length,
+
+      monthBills:
+
+        monthBills.length,
+
+      totalBills:
+
+        totalBills.length,
+
+      todayOrders,
+
+      monthOrders,
+
+      totalOrders,
+
+      pendingOrders,
+
+      acceptedOrders,
+
+      deliveredOrders,
+
+      cancelledOrders,
+
+      averageOrderValue: Number(averageOrderValue.toFixed(2)),
+
+    };
+
+  }
+
+  static async getRevenueChart(
+    days: number = 7
+  ) {
+
+    const startDate = new Date();
+
+    startDate.setDate(
+      startDate.getDate() - days + 1
+    );
+
+    startDate.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    const rawResult =
+      await prisma.bill.aggregateRaw({
+
+        pipeline: [
+
+          {
+
+            $match: {
+
+              created_at: {
+
+                $gte: {
+
+                  $date:
+                    startDate.toISOString()
+
+                }
+
+              }
+
+            }
+
+          },
+
+          {
+
+            $group: {
+
+              _id: {
+
+                $dateToString: {
+
+                  format: "%Y-%m-%d",
+
+                  date: "$created_at"
+
+                }
+
+              },
+
+              revenue: {
+
+                $sum: "$netAmount"
+
+              },
+
+              bills: {
+
+                $sum: 1
+
+              }
+
+            }
+
+          },
+
+          {
+
+            $sort: {
+
+              _id: 1
+
+            }
+
+          }
+
+        ]
+
+      });
+
+    const rows =
+      rawResult as unknown as Array<{
+
+        _id: string;
+
+        revenue: number;
+
+        bills: number;
+
+      }>;
+
+    const revenueMap = new Map<
+      string,
+      {
+        revenue: number;
+        bills: number;
+      }
+    >();
+
+    rows.forEach((row) => {
+
+      revenueMap.set(row._id, {
+
+        revenue: Number(row.revenue.toFixed(2)),
+
+        bills: row.bills
+
+      });
+
+    });
+
+    const result: Array<{
+
+      date: string;
+
+      revenue: number;
+
+      bills: number;
+
+    }> = [];
+
+    for (let i = 0; i < days; i++) {
+
+      const currentDate = new Date(startDate);
+
+      currentDate.setDate(
+        startDate.getDate() + i
+      );
+
+      const date =
+        currentDate
+          .toISOString()
+          .split("T")[0];
+
+      const data =
+        revenueMap.get(date);
+
+      result.push({
+
+        date,
+
+        revenue:
+          data?.revenue ?? 0,
+
+        bills:
+          data?.bills ?? 0
+
+      });
+
+    }
+
+    return result;
+
+  }
+
+  static async getTopCustomers() {
+
+    const bills = await prisma.bill.groupBy({
+
+      by: [
+
+        "customerName",
+
+        "customerPhone"
+
+      ],
+
+      _count: {
+
+        _all: true
+
+      },
+
+      _sum: {
+
+        netAmount: true
+
+      }
+
+    });
+
+    const orders = await prisma.order.groupBy({
+
+      by: [
+
+        "customerName",
+
+        "customerPhone"
+
+      ],
+
+      _count: {
+
+        _all: true
+
+      }
+
+    });
+
+    const orderMap = new Map<
+      string,
+      number
+    >();
+
+    for (const order of orders) {
+
+      orderMap.set(
+
+        `${order.customerName}_${order.customerPhone}`,
+
+        order._count._all
+
+      );
+
+    }
+
+    const customers = bills.map((bill) => {
+
+      const key =
+        `${bill.customerName}_${bill.customerPhone}`;
+
+      return {
+
+        name: bill.customerName,
+
+        phone: bill.customerPhone,
+
+        bills: bill._count._all,
+
+        orders:
+          orderMap.get(key) ?? 0,
+
+        revenue:
+          Number(
+            bill._sum.netAmount ?? 0
+          )
+
+      };
+
+    });
+
+    customers.sort(
+
+      (a, b) =>
+
+        b.revenue -
+
+        a.revenue
+
+    );
+
+    return customers.slice(0, 5);
+
+  }
+
+  static async getCustomerInsights() {
+
+    const bills = await prisma.bill.findMany({
+
+      select: {
+
+        customerPhone: true
+
+      }
+
+    });
+
+    const customerMap = new Map<string, number>();
+
+    for (const bill of bills) {
+
+      const phone = bill.customerPhone?.trim();
+
+      if (!phone) continue;
+
+      customerMap.set(
+
+        phone,
+
+        (customerMap.get(phone) ?? 0) + 1
+
+      );
+
+    }
+
+    let newCustomers = 0;
+
+    let returningCustomers = 0;
+
+    customerMap.forEach((count) => {
+
+      if (count === 1) {
+
+        newCustomers++;
+
+      } else {
+
+        returningCustomers++;
+
+      }
+
+    });
+
+    const totalCustomers =
+      newCustomers + returningCustomers;
+
+    const repeatPurchaseRate =
+      totalCustomers === 0
+        ? 0
+        : Number(
+          (
+            (returningCustomers /
+              totalCustomers) *
+            100
+          ).toFixed(2)
+        );
+
+    return {
+
+      newCustomers,
+
+      returningCustomers,
+
+      repeatPurchaseRate
+
+    };
+
+  }
+
+  static async getRecentOrders() {
+
+    const orders = await prisma.order.findMany({
+
+      orderBy: {
+
+        createdAt: "desc"
+
+      },
+
+      take: 5,
+
+      select: {
+
+        id: true,
+
+        customerName: true,
+
+        totalAmount: true,
+
+        status: true,
+
+        createdAt: true
+
+      }
+
+    });
+
+    return orders.map((order) => ({
+
+      id: order.id,
+
+      customerName: order.customerName,
+
+      totalAmount: order.totalAmount ?? 0,
+
+      status: order.status,
+
+      createdAt: order.createdAt
+
+    }));
+
+  }
+
 }

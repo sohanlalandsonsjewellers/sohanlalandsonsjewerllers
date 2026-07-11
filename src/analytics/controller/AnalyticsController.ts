@@ -372,4 +372,213 @@ export default class AnalyticsController {
 
   }
 
+  static async businessDashboard(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const dashboard =
+        await AnalyticsService.getBusinessDashboard();
+
+      return res.status(200).json({
+
+        success: true,
+
+        dashboard
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Business Dashboard Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch business dashboard."
+
+      });
+
+    }
+
+  }
+
+  static async revenueChart(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const days =
+        Number(req.query.days) || 7;
+
+      const revenue =
+        await AnalyticsService.getRevenueChart(days);
+
+      return res.status(200).json({
+
+        success: true,
+
+        revenue
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Revenue Chart Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch revenue chart."
+
+      });
+
+    }
+
+  }
+
+  static async topCustomers(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const customers =
+        await AnalyticsService.getTopCustomers();
+
+      return res.status(200).json({
+
+        success: true,
+
+        customers
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Top Customers Error:",
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch top customers."
+
+      });
+
+    }
+
+  }
+
+  static async customerInsights(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const insights =
+        await AnalyticsService.getCustomerInsights();
+
+      return res.status(200).json({
+
+        success: true,
+
+        insights
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+
+        "Customer Insights Error:",
+
+        error
+
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch customer insights."
+
+      });
+
+    }
+
+  }
+
+  static async recentOrders(
+    req: Request,
+    res: Response
+  ) {
+
+    try {
+
+      const orders =
+        await AnalyticsService.getRecentOrders();
+
+      return res.status(200).json({
+
+        success: true,
+
+        orders
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+
+        "Recent Orders Error:",
+
+        error
+
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Unable to fetch recent orders."
+
+      });
+
+    }
+
+  }
+
 }

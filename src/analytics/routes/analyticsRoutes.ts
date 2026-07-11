@@ -14,5 +14,10 @@ router.get("/search", AuthMiddleware, verifyAdmin, AnalyticsController.searchAna
 router.get("/daily",AuthMiddleware,verifyAdmin,AnalyticsController.dailyAnalytics);
 router.get("/realtime",AuthMiddleware,verifyAdmin,AnalyticsController.realtimeAnalytics);
 router.get("/overview",AuthMiddleware,verifyAdmin,AnalyticsController.overview);
+router.get("/business",AuthMiddleware,verifyAdmin,AnalyticsController.businessDashboard);
+router.get("/business/revenue-chart",AuthMiddleware,verifyAdmin,AnalyticsController.revenueChart);
+router.get("/business/topCustomers",AuthMiddleware,verifyAdmin,AnalyticsController.topCustomers);
+router.get("/business/customerinsights",AuthMiddleware,verifyAdmin,AnalyticsController.customerInsights);
+router.get("/business/recentorders",AuthMiddleware,verifyAdmin,AnalyticsController.recentOrders);
 
 export default router;
