@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import path from "path";
 
 import cron from "node-cron";
+import cookieParser from "cookie-parser";
 
 import {
   deleteZeroStockProducts
@@ -72,6 +73,8 @@ app.use(cors({
   credentials: true
 
 }));
+
+app.use(cookieParser());
 
 app.use(
   express.json({

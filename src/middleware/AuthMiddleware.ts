@@ -1,25 +1,105 @@
-import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from "express";
+import {
 
-const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        console.log("❌ Auth Header missing or invalid format!");
-        return res.status(401).json({ message: "UnAuthorized" });
-    }
+    Request,
 
-    const token = authHeader.split(" ")[1];
-    
+    Response,
+
+    NextFunction
+
+} from "express";
+
+import {
+
+    verifyAccessToken
+
+} from "../utils/jwt";
+
+const authMiddleware = (
+
+    req: Request,
+
+    res: Response,
+
+    next: NextFunction
+
+) => {
+
     try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET as string);
-        (req as any).user = payload; 
-        console.log("✅ Auth Success!");
-        next(); 
-    } catch (err) {
-        console.log("❌ Token Verification Failed:", err);
-        return res.status(401).json({ message: "UnAuthorized: Token expired or invalid" });
+
+        let token: string | undefined;
+
+        /**
+         * Bearer Token
+         */
+
+        const authHeader =
+            req.headers.authorization;
+
+        if (
+
+            authHeader &&
+
+            authHeader.startsWith("Bearer ")
+
+        ) {
+
+            token =
+                authHeader.split(" ")[1];
+
+        }
+
+        /**
+         * HttpOnly Cookie
+         */
+
+        if (
+
+            !token &&
+
+            (req as any).cookies?.access_token
+
+        ) {
+
+            token =
+                (req as any).cookies.access_token;
+
+        }
+
+        if (!token) {
+
+            return res.status(401).json({
+
+                success: false,
+
+                message: "Unauthorized"
+
+            });
+
+        }
+
+        const payload =
+            verifyAccessToken(token);
+
+        (req as any).user = payload;
+
+        next();
+
     }
+
+    catch (err) {
+
+        console.error(err);
+
+        return res.status(401).json({
+
+            success: false,
+
+            message: "Token expired or invalid."
+
+        });
+
+    }
+
 };
 
 export default authMiddleware;
