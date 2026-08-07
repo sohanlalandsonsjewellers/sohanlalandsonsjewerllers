@@ -13,7 +13,7 @@ const authMiddleware = (
   try {
     let token: string | undefined;
 
-    // 1. Check Authorization Header
+    // 1. Check Authorization Header (Bearer token)
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.split(" ")[1];
