@@ -1,379 +1,137 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet";
 import session from "express-session";
 import passport from "passport";
 import rateLimit from "express-rate-limit";
 import path from "path";
-
 import cron from "node-cron";
+import cookieParser from "cookie-parser";
 
-import {
-  deleteZeroStockProducts
-}
-  from "./src/utils/deleteZeroStockProducts.js";
+import { deleteZeroStockProducts } from "./src/utils/deleteZeroStockProducts.js";
+import Routes from "./src/routes/index.js";
 
-const env =
-  process.env.NODE_ENV
-  ||
-  "local";
+const env = process.env.NODE_ENV || "local";
 
 dotenv.config({
-  path: `.env.${env}`
+  path: `.env.${env}`,
 });
 
 const app = express();
 
-const PORT =
-  process.env.PORT
-    ?
-    Number(process.env.PORT)
-    :
-    3000;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
+// Security Headers
+app.use(helmet());
 
-// ===========================
-// Middleware
-// ===========================
-
-const allowedOrigins =
-  process.env.CORS_ORIGIN
-    ?
-    process.env.CORS_ORIGIN.split(",")
-    :
-    [];
-
-app.use(cors({
-
-  origin: function (origin, callback) {
-
-    if (
-      !origin ||
-      allowedOrigins.includes(origin)
-    ) {
-
-      callback(
-        null,
-        true
-      );
-
-    } else {
-
-      callback(
-        new Error(
-          "Not allowed by CORS"
-        )
-      );
-
-    }
-
-  },
-
-  credentials: true
-
-}));
+// CORS Config
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",")
+  : [];
 
 app.use(
-  express.json({
-    limit: "10mb"
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
   })
 );
 
-app.use(
-  express.urlencoded({
+app.use(cookieParser());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-    extended: true,
-
-    limit: "10mb"
-
-  })
-);
-
+// Static Asset Express Route Protection
 app.use(
   "/uploads",
-  express.static(
-    path.join(
-      process.cwd(),
-      "uploads"
-    )
-  )
+  express.static(path.join(process.cwd(), "uploads"))
 );
+app.use("/static", express.static("public"));
 
+// Rate Limiters
+const globalLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests, please try again later.",
+  },
+});
+
+app.use(globalLimiter);
+
+// Session Config
 app.use(
-  "/static",
-  express.static(
-    "public"
-  )
-);
-
-
-// ===========================
-// Rate Limiter
-// ===========================
-
-const globalLimiter =
-  rateLimit({
-
-    windowMs:
-      5 * 60 * 1000,
-
-    max: 10000,
-
-    standardHeaders: true,
-
-    legacyHeaders: false,
-
-    message: {
-
-      success: false,
-
-      error:
-        "Too many requests"
-
-    }
-
-  });
-
-app.use(
-  globalLimiter
-);
-
-
-// ===========================
-// Session
-// ===========================
-
-app.use(
-
   session({
-
-    secret:
-
-      process.env
-        .SESSION_SECRET
-
-      ||
-
-      "default-secret",
-
+    secret: process.env.SESSION_SECRET || "default-secret",
     resave: false,
-
     saveUninitialized: false,
-
     cookie: {
-
-      secure:
-
-        process.env
-          .NODE_ENV ===
-
-        "production"
-
-    }
-
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    },
   })
-
 );
 
-app.use(
-  passport.initialize()
-);
+app.use(passport.initialize());
+app.use(passport.session());
 
-app.use(
-  passport.session()
-);
-
-
-// ===========================
-// Test Route
-// ===========================
-
-app.get(
-  "/",
-  (req, res) => {
-
-    res.json({
-
-      Ping: "Pong",
-
-      Environment: env,
-
-      Port: PORT
-
-    })
-
-  }
-);
-
-
-// ===========================
 // Routes
-// ===========================
+app.use(Routes);
 
-import Routes
-  from "./src/routes/index.js";
+// Health check
+app.get("/", (req, res) => {
+  res.json({
+    Ping: "Pong",
+    Environment: env,
+    Port: PORT,
+  });
+});
 
-app.use(
-  Routes
-);
-
-
-// ===========================
-// AUTO DELETE CRON
-// Runs daily 12:00 AM
-// ===========================
-
-cron.schedule(
-
-  "0 0 * * *",
-
-  async () => {
-
-    try {
-
-      console.log(
-        "Running Zero Stock Cleanup..."
-      );
-
-      await deleteZeroStockProducts();
-
-      console.log(
-        "Cleanup Finished"
-      );
-
-    } catch (err) {
-
-      console.error(
-        "Cleanup Error",
-        err
-      );
-
-    }
-
+// Cron Jobs
+cron.schedule("0 0 * * *", async () => {
+  try {
+    console.log("Running Zero Stock Cleanup...");
+    await deleteZeroStockProducts();
+    console.log("Cleanup Finished");
+  } catch (err) {
+    console.error("Cleanup Error", err);
   }
+});
 
-);
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
 
-//deleted the cron job for testing purposes 10-15 after every second
+// Process Level Handlers
+process.on("unhandledRejection", (err: any) => {
+  console.error("Unhandled Rejection:", err?.message ?? err);
+});
 
-// cron.schedule(
+process.on("uncaughtException", (err: any) => {
+  console.error("Uncaught Exception:", err?.message ?? err);
+  process.exit(1);
+});
 
-//   "*/10 * * * * *",
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} in ${env} mode`);
+});
 
-//   async () => {
-
-//     console.log(
-//       "Running Zero Stock Cleanup..."
-//     );
-
-//     await deleteZeroStockProducts();
-
-//     console.log(
-//       "Cleanup Finished"
-//     );
-
-//   }
-
-// )
-
-
-// ===========================
-// 404
-// ===========================
-
-app.use(
-
-  (req, res) => {
-
-    res.status(404).json({
-
-      success: false,
-
-      message:
-
-        `Route not found: ${req.method} ${req.originalUrl}`
-
-    })
-
-  }
-
-);
-
-
-// ===========================
-// Error Handlers
-// ===========================
-
-process.on(
-
-  "unhandledRejection",
-
-  (err: any) => {
-
-    console.error(
-      "Unhandled Rejection:",
-      err?.message ?? err
-    )
-
-  }
-
-);
-
-process.on(
-
-  "uncaughtException",
-
-  (err: any) => {
-
-    console.error(
-      "Uncaught Exception:",
-      err?.message ?? err
-    );
-
-    process.exit(1);
-
-  }
-
-);
-
-
-// ===========================
-// Start Server
-// ===========================
-
-const server =
-  app.listen(
-
-    PORT,
-
-    () => {
-
-      console.log(
-
-        `🚀 Server running on port ${PORT} in ${env} mode`
-
-      )
-
-    }
-
-  );
-
-server.on(
-
-  "error",
-
-  (err: any) => {
-
-    console.error(
-
-      "Server failed to start:",
-
-      err
-
-    )
-
-  }
-
-);
+server.on("error", (err: any) => {
+  console.error("Server failed to start:", err);
+});
 
 export default app;
