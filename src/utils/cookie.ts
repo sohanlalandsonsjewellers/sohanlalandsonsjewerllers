@@ -5,13 +5,16 @@ export const setAuthCookies = (
   accessToken: string,
   refreshToken: string
 ) => {
-  // Localhost (http) par false rahega, Render Dev / Main (https) par automatically true hoga
-  const isHttps = process.env.NODE_ENV === "production" || process.env.IS_RENDER === "true" || process.env.RENDER === "true";
+  // Render environment (Dev ya Prod) aur Production HTTPS ke liye dynamically True hoga
+  const isHttps =
+    process.env.NODE_ENV === "production" ||
+    process.env.IS_RENDER === "true" ||
+    process.env.RENDER === "true";
 
   const cookieOptions = {
     httpOnly: true,
-    secure: isHttps, // HTTPS domains (Render Dev & Prod) ke liye mandatory true
-    sameSite: isHttps ? ("none" as const) : ("lax" as const), // Cross-domain Render Deployment fix
+    secure: isHttps, // Render HTTPS par mandatory true
+    sameSite: isHttps ? ("none" as const) : ("lax" as const), // Fixes cross-domain Render deployment
     path: "/",
   };
 
@@ -29,7 +32,10 @@ export const setAuthCookies = (
 };
 
 export const clearAuthCookies = (res: Response) => {
-  const isHttps = process.env.NODE_ENV === "production" || process.env.IS_RENDER === "true" || process.env.RENDER === "true";
+  const isHttps =
+    process.env.NODE_ENV === "production" ||
+    process.env.IS_RENDER === "true" ||
+    process.env.RENDER === "true";
 
   const cookieOptions = {
     httpOnly: true,
