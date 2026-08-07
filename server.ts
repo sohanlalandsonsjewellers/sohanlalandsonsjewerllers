@@ -31,13 +31,13 @@ app.use(
 
 // Dynamic & Dynamic Fallback CORS Config
 const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",").map((item) => item.trim())
+  ? process.env.CORS_ORIGIN.split(",").map((item) => item.trim().replace(/\/$/, ""))
   : [
       "http://localhost:3000",
       "http://localhost:5173",
       "https://sohanlalandsonsjeweller-fe.onrender.com",
-      "https://sohanlalandsonsjewerller-tg8k.vercel.app/"
-    ];
+      "https://sohanlalandsonsjewerller-tg8k.vercel.app"
+    ].map((item) => item.replace(/\/$/, ""));
 
 app.use(
   cors({
