@@ -22,24 +22,36 @@ const app = express();
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
-// Security Headers
-app.use(helmet());
+// Helmet Config - Allowing cross-origin resource sharing for cookies/images
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
-// CORS Config
+// Dynamic & Dynamic Fallback CORS Config
 const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",")
-  : [];
+  ? process.env.CORS_ORIGIN.split(",").map((item) => item.trim())
+  : [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "https://sohanlalandsonsjeweller-fe.onrender.com",
+      "https://sohanlalandsonsjewerller-tg8k.vercel.app/"
+    ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, etc.) or matching origins
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        callback(new Error(`CORS Blocked for Origin: ${origin}`));
       }
     },
-    credentials: true,
+    credentials: true, // Mandated for HttpOnly cookie transfer across domain calls
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 
@@ -54,7 +66,7 @@ app.use(
 );
 app.use("/static", express.static("public"));
 
-// Rate Limiters
+// Global Rate Limiter
 const globalLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 500,
@@ -68,16 +80,18 @@ const globalLimiter = rateLimit({
 
 app.use(globalLimiter);
 
-// Session Config
+// Session Config (Aligned with Production SSL)
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "default-secret",
+    secret: process.env.SESSION_SECRET || "default-secret-key",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
     },
   })
 );

@@ -126,7 +126,7 @@ class AuthController {
       const accessToken = generateAccessToken(payload);
       const refreshToken = generateRefreshToken(payload);
 
-      // Set HttpOnly Cookies
+      // Set HttpOnly Cross-Site Safe Cookies
       setAuthCookies(res, accessToken, refreshToken);
 
       return res.status(200).json({
@@ -143,7 +143,7 @@ class AuthController {
           alternatePhone: user.alternatePhone,
           adminRole: user.adminRole,
         },
-        token: accessToken, // Kept for backward compatibility with existing frontend
+        token: accessToken, // Compatibility for legacy localStorage fallbacks
       });
     } catch (error) {
       console.error("Login Error:", error);
