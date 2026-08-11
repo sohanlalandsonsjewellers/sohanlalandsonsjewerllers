@@ -504,6 +504,201 @@ class ProductController {
     }
   }
 
+  // ===================================================================
+// ===================== BULK PRICE ADJUSTMENT =======================
+// ===================================================================
+
+static async bulkPriceAdjustment(req: Request, res: Response) {
+  try {
+    const {
+      applyTo = "all",
+      category,
+      name,
+      type,
+      percentage,
+    } = req.body;
+
+    // ---------------------------------------------------------------
+    // VALIDATE APPLY TO
+    // ---------------------------------------------------------------
+    const adjustmentScope = String(applyTo).toLowerCase();
+
+    if (
+      adjustmentScope !== "all" &&
+      adjustmentScope !== "category"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "applyTo must be either 'all' or 'category'",
+      });
+    }
+
+    // ---------------------------------------------------------------
+    // VALIDATE TYPE
+    // ---------------------------------------------------------------
+    const adjustmentType = String(type).toLowerCase();
+
+    if (
+      adjustmentType !== "increase" &&
+      adjustmentType !== "decrease"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "type must be either 'increase' or 'decrease'",
+      });
+    }
+
+    // ---------------------------------------------------------------
+    // VALIDATE PERCENTAGE
+    // ---------------------------------------------------------------
+    const adjustmentPercentage = Number(percentage);
+
+    if (
+      !Number.isFinite(adjustmentPercentage) ||
+      adjustmentPercentage <= 0 ||
+      adjustmentPercentage > 100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Percentage must be greater than 0 and up to 100",
+      });
+    }
+
+    // ---------------------------------------------------------------
+    // CATEGORY + NAME VALIDATION
+    // ---------------------------------------------------------------
+    if (adjustmentScope === "category") {
+      if (
+        !category ||
+        typeof category !== "string" ||
+        category.trim() === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Category is required",
+        });
+      }
+
+      if (
+        !name ||
+        typeof name !== "string" ||
+        name.trim() === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Product name is required",
+        });
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // BUILD PRODUCT FILTER
+    // ---------------------------------------------------------------
+    const whereCondition: any = {
+      deletedAt: null,
+    };
+
+    if (adjustmentScope === "category") {
+      whereCondition.category = category.trim();
+      whereCondition.name = name.trim();
+    }
+
+    // ---------------------------------------------------------------
+    // GET PRODUCTS
+    // ---------------------------------------------------------------
+    const products = await prisma.product.findMany({
+      where: whereCondition,
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        price: true,
+      },
+    });
+
+    // ---------------------------------------------------------------
+    // NO PRODUCTS FOUND
+    // ---------------------------------------------------------------
+    if (products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message:
+          adjustmentScope === "category"
+            ? `No active product found with category "${category}" and name "${name}"`
+            : "No active products found",
+      });
+    }
+
+    // ---------------------------------------------------------------
+    // CALCULATE MULTIPLIER
+    // ---------------------------------------------------------------
+    const multiplier =
+      adjustmentType === "increase"
+        ? 1 + adjustmentPercentage / 100
+        : 1 - adjustmentPercentage / 100;
+
+    // ---------------------------------------------------------------
+    // UPDATE PRODUCTS
+    // ---------------------------------------------------------------
+    let updatedCount = 0;
+
+    for (const product of products) {
+      const oldPrice = Number(product.price);
+
+      const newPrice = Number(
+        (oldPrice * multiplier).toFixed(2)
+      );
+
+      await prisma.product.update({
+        where: {
+          id: product.id,
+        },
+        data: {
+          price: newPrice,
+        },
+      });
+
+      updatedCount++;
+    }
+
+    // ---------------------------------------------------------------
+    // RESPONSE
+    // ---------------------------------------------------------------
+    return res.status(200).json({
+      success: true,
+      message:
+        adjustmentType === "increase"
+          ? `Price increased by ${adjustmentPercentage}% successfully`
+          : `Price decreased by ${adjustmentPercentage}% successfully`,
+      adjustment: {
+        applyTo: adjustmentScope,
+
+        ...(adjustmentScope === "category"
+          ? {
+              category: category.trim(),
+              name: name.trim(),
+            }
+          : {}),
+
+        type: adjustmentType,
+        percentage: adjustmentPercentage,
+        productsUpdated: updatedCount,
+      },
+    });
+  } catch (error: any) {
+    console.error(
+      "Bulk Price Adjustment Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update product prices",
+      error: error?.message,
+    });
+  }
+}
+
   static async remove(req: Request, res: Response) {
     try {
       const { id } = req.params;

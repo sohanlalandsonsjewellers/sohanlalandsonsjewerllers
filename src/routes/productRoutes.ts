@@ -18,13 +18,20 @@ const adminUploadFields = uploadCloudinary.fields([
 router.post("/addProduct", authMiddleware, verifyAdmin, adminUploadFields, ProductController.create);
 router.put("/updateById/:id", authMiddleware, verifyAdmin, adminUploadFields, ProductController.update);
 
+// 🔥 BULK PRICE ADJUSTMENT // Increase / decrease price of all active products by percentage
+router.post( "/bulk-price-adjustment", authMiddleware, verifyAdmin, ProductController.bulkPriceAdjustment);
+
 // Normal CRUD Systems Controls Trace lines
 router.get("/getAllProduct", authMiddleware, verifyAdmin, ProductController.getAll);
 router.get("/getById/:id", authMiddleware, verifyAdmin, ProductController.getById);
 router.delete("/delete/:id", authMiddleware, verifyAdmin, ProductController.remove);
 
+
+
 // ================= PUBLIC ENDPOINTS =================
 router.get("/public/getAllProduct", ProductController.getPublicProducts);
 router.get("/public/getById/:id", ProductController.getPublicProductById);
+
+
 
 export default router;
