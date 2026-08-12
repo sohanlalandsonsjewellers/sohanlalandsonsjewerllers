@@ -10,83 +10,83 @@ datasource db {
 }
 
 model User {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  name           String
-  email          String   @unique
-  password       String
-  phoneNumber    String   @unique  // database me phoneNumber hai
-  
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String @unique
+  password    String
+  phoneNumber String @unique // database me phoneNumber hai
+
   // 🚀 NEW INJECTIONS: User permanent billing profile data layers
   address        String?  @default("") // Defaults to blank string safely
   pincode        String?  @default("")
   alternatePhone String?  @default("")
   area           String?  @default("") // ✅ Added
-  adminRole      Boolean? 
+  adminRole      Boolean?
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 }
 
 model Product {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
-  category     String
-  subCategory  String?
-  price        Float
-  weight       Float
-  description  String?
-  images       Json?     // Normal square/portrait grid display images array
-  
-  isBanner     Boolean  @default(false) // Dynamic banner visibility marker toggle
-  bannerImages Json?     // Holds explicit links layout: { desktopUrl: string, mobileUrl: string }
-  hsnCode      String?   @default("7117") // 👈 NEW
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  category    String
+  subCategory String?
+  price       Float
+  weight      Float
+  description String?
+  images      Json? // Normal square/portrait grid display images array
 
-  sku          String   @unique
-  stock        Int      @default(0)
-  deletedAt    DateTime?   // ← ADD THIS
-  length Float? @default(10)
-  breadth Float? @default(10)
-  height Float? @default(10)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  isBanner     Boolean @default(false) // Dynamic banner visibility marker toggle
+  bannerImages Json? // Holds explicit links layout: { desktopUrl: string, mobileUrl: string }
+  hsnCode      String? @default("7117") // 👈 NEW
+
+  sku        String    @unique
+  stock      Int       @default(0)
+  deletedAt  DateTime? // ← ADD THIS
+  length     Float?    @default(10)
+  breadth    Float?    @default(10)
+  height     Float?    @default(10)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
 }
 
 model Bill {
-  id            String    @id @default(auto()) @map("_id") @db.ObjectId
-  billNo        String
-  invoiceNo     String
-  customerName  String
-  customerPhone String
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  billNo          String
+  invoiceNo       String
+  customerName    String
+  customerPhone   String
   customerAddress String?
   customerPincode String?
-  customerEmail String?
-  items         Json
-  totalAmount   Float
-  discount      Float
-  gstPercent    Float      
-  cgstPercent   Float?      
-  sgstPercent   Float?      
-  cgstAmount    Float?      
-  sgstAmount    Float?      
-  gstAmount     Float       
-  netAmount     Float
-  paymentStatus String    @default("pending")
-  invoicePdfUrl String?
-  created_at    DateTime  @default(now())
+  customerEmail   String?
+  items           Json
+  totalAmount     Float
+  discount        Float
+  gstPercent      Float
+  cgstPercent     Float?
+  sgstPercent     Float?
+  cgstAmount      Float?
+  sgstAmount      Float?
+  gstAmount       Float
+  netAmount       Float
+  paymentStatus   String   @default("pending")
+  invoicePdfUrl   String?
+  created_at      DateTime @default(now())
 }
 
 model Counter {
-  id   String @id @map("_id")
-  seq  Int
+  id  String @id @map("_id")
+  seq Int
 }
 
 model Order {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId        String
-  customerName  String
-  customerPhone String
-  address       String
-  pincode       String
-  items         Json
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String
+  customerName   String
+  customerPhone  String
+  address        String
+  pincode        String
+  items          Json
   adminPrice     Float?
   gstAmount      Float?
   shippingCharge Float?
@@ -103,8 +103,8 @@ model Order {
   trackingUrl    String?
   labelUrl       String?
   manifestUrl    String?
-  shipmentStatus String? @default("NOT_CREATED")
-  createdAt DateTime @default(now())
+  shipmentStatus String?  @default("NOT_CREATED")
+  createdAt      DateTime @default(now())
 }
 
 model Notification {
@@ -118,15 +118,14 @@ model Notification {
 
 model UserFeedback {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String?  @db.ObjectId 
+  userId    String?  @db.ObjectId
   userName  String
   area      String
   pincode   String
   rating    Int
-  comment   String   // @db.Text hata diya, ye automatically MongoDB mein 'string' store karega
-  createdAt DateTime @default(now()) @db.Date 
+  comment   String // @db.Text hata diya, ye automatically MongoDB mein 'string' store karega
+  createdAt DateTime @default(now()) @db.Date
 }
-
 
 enum EventType {
   LOGIN
@@ -144,20 +143,20 @@ enum EventType {
 }
 
 model Event {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  eventType EventType
+  userId    String?   @db.ObjectId
+  productId String?   @db.ObjectId
+  orderId   String?   @db.ObjectId
+  sessionId String?
+  ipAddress String?
+  device    String?
+  browser   String?
+  os        String?
+  page      String?
+  metadata  Json?
+  createdAt DateTime  @default(now())
 
-  id          String      @id @default(auto()) @map("_id") @db.ObjectId
-  eventType   EventType
-  userId      String?     @db.ObjectId
-  productId   String?     @db.ObjectId
-  orderId      String?    @db.ObjectId
-  sessionId    String?
-  ipAddress    String?
-  device       String?
-  browser      String?
-  os           String?
-  page         String?
-  metadata     Json?
-  createdAt    DateTime   @default(now())
   @@index([userId])
   @@index([productId])
   @@index([eventType])
@@ -165,33 +164,43 @@ model Event {
 }
 
 model Session {
-
-  id String @id @default(auto()) @map("_id") @db.ObjectId
-
-  userId String @db.ObjectId
-
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String   @db.ObjectId
   refreshTokenHash String
-
-  device String?
-
-  browser String?
-
-  os String?
-
-  ipAddress String?
-
-  userAgent String?
-
-  isRevoked Boolean @default(false)
-
-  expiresAt DateTime
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
+  device           String?
+  browser          String?
+  os               String?
+  ipAddress        String?
+  userAgent        String?
+  isRevoked        Boolean  @default(false)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([userId])
-
   @@index([expiresAt])
+}
 
+model Coupon {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  code        String       @unique
+  description String?
+  isActive    Boolean      @default(true)
+  startAt     DateTime?
+  expiresAt   DateTime?
+  usageLimit  Int?
+  usedCount   Int          @default(0)
+  slabs       CouponSlab[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model CouponSlab {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  couponId        String   @db.ObjectId
+  coupon          Coupon   @relation(fields: [couponId], references: [id])
+  minAmount       Float
+  discountPercent Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

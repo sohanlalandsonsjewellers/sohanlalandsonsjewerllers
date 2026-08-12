@@ -61,77 +61,428 @@ export default class OrderController {
 
   static async placeOrder(req: Request, res: Response) {
     try {
-      // const { items, adminPrice, discount, customerName, customerPhone, address, pincode } = req.body;
       const {
         items,
-        adminPrice,
-        discount,
         customerName,
         customerPhone,
         address,
         pincode,
         shippingCharge,
         courierId,
-        courierName
+        courierName,
+        couponCode,
       } = req.body;
 
-      if (adminPrice === undefined || adminPrice === null) {
-        return res.status(400).json({ success: false, message: "Admin Price is missing from frontend!" });
+      // ============================================================
+      // BASIC VALIDATION
+      // ============================================================
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Cart items are required.",
+        });
       }
 
       const userAuth = (req as any).user;
-      const priceNum = Number(adminPrice);
-      const discNum = Number(discount || 0);
-      const gst = priceNum * 0.03;
+
+      if (!userAuth?.id) {
+        return res.status(401).json({
+          success: false,
+          message: "User authentication required.",
+        });
+      }
+
+      // ============================================================
+      // GET CURRENT PRODUCT PRICES FROM DATABASE
+      // IMPORTANT:
+      // NEVER TRUST FRONTEND PRICE
+      // ============================================================
+
+      const productIds = items.map((item: any) => item.productId);
+
+      const products = await prisma.product.findMany({
+        where: {
+          id: {
+            in: productIds,
+          },
+          deletedAt: null,
+        },
+      });
+
+      if (products.length !== productIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: "One or more products are no longer available.",
+        });
+      }
+
+      // ============================================================
+      // BUILD SERVER-SIDE ORDER ITEMS
+      // ============================================================
+
+      const serverItems = items.map((item: any) => {
+        const product = products.find(
+          (p) => p.id === item.productId
+        );
+
+        if (!product) {
+          throw new Error(
+            `Product not found: ${item.productId}`
+          );
+        }
+
+        const quantity = Number(item.qty);
+
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new Error(
+            `Invalid quantity for product: ${product.name}`
+          );
+        }
+
+        // Stock validation
+        if (quantity > product.stock) {
+          throw new Error(
+            `${product.name} has only ${product.stock} item(s) in stock.`
+          );
+        }
+
+        const unitPrice = Number(product.price);
+
+        const lineTotal =
+          unitPrice * quantity;
+
+        return {
+          productId: product.id,
+          name: product.name,
+          sku: product.sku,
+          quantity,
+          qty: quantity,
+          unitPrice,
+          price: unitPrice,
+          lineTotal,
+          image:
+            Array.isArray(product.images)
+              ? product.images[0]
+              : undefined,
+        };
+      });
+
+      // ============================================================
+      // ACTUAL SERVER-SIDE SUBTOTAL
+      // ============================================================
+
+      const subtotal = serverItems.reduce(
+        (sum: number, item: any) =>
+          sum + Number(item.lineTotal),
+        0
+      );
+
+      // ============================================================
+      // COUPON VALIDATION
+      // ============================================================
+
+      let couponDiscount = 0;
+      let appliedCouponCode: string | null = null;
+      let appliedDiscountPercent = 0;
+      let appliedSlabMinAmount = 0;
+
+      if (
+        couponCode &&
+        String(couponCode).trim() !== ""
+      ) {
+        const normalizedCouponCode =
+          String(couponCode)
+            .trim()
+            .toUpperCase();
+
+        const coupon =
+          await prisma.coupon.findUnique({
+            where: {
+              code: normalizedCouponCode,
+            },
+            include: {
+              slabs: true,
+            },
+          });
+
+        if (!coupon) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid coupon code.",
+          });
+        }
+
+        // Active check
+        if (!coupon.isActive) {
+          return res.status(400).json({
+            success: false,
+            message: "This coupon is inactive.",
+          });
+        }
+
+        // Start date check
+        if (
+          coupon.startAt &&
+          new Date() < coupon.startAt
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "This coupon is not active yet.",
+          });
+        }
+
+        // Expiry check
+        if (
+          coupon.expiresAt &&
+          new Date() > coupon.expiresAt
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "This coupon has expired.",
+          });
+        }
+
+        // Usage limit check
+        if (
+          coupon.usageLimit !== null &&
+          coupon.usedCount >= coupon.usageLimit
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Coupon usage limit has been reached.",
+          });
+        }
+
+        // ========================================================
+        // SELECT BEST SLAB BASED ON ACTUAL DATABASE SUBTOTAL
+        // ========================================================
+
+        const eligibleSlabs =
+          coupon.slabs
+            .filter(
+              (slab) =>
+                Number(slab.minAmount) <= subtotal
+            )
+            .sort(
+              (a, b) =>
+                Number(b.minAmount) -
+                Number(a.minAmount)
+            );
+
+        if (eligibleSlabs.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Coupon is not applicable for this order amount.",
+          });
+        }
+
+        const selectedSlab =
+          eligibleSlabs[0];
+
+        appliedDiscountPercent =
+          Number(
+            selectedSlab.discountPercent
+          );
+
+        appliedSlabMinAmount =
+          Number(
+            selectedSlab.minAmount
+          );
+
+        couponDiscount =
+          Number(
+            (
+              subtotal *
+              appliedDiscountPercent /
+              100
+            ).toFixed(2)
+          );
+
+        appliedCouponCode =
+          coupon.code;
+      }
+
+      // ============================================================
+      // TAXABLE AMOUNT AFTER COUPON
+      // ============================================================
+
+      const taxableAmount = Number(
+        Math.max(
+          0,
+          subtotal - couponDiscount
+        ).toFixed(2)
+      );
+
+      // ============================================================
+      // GST AFTER DISCOUNT
+      // GST = 3% OF TAXABLE AMOUNT
+      // ============================================================
+
+      const gst = Number(
+        (taxableAmount * 0.03).toFixed(2)
+      );
+
+      // ============================================================
+      // SHIPPING
+      // ============================================================
 
       const shipping =
         Number(shippingCharge || 0);
 
-      const total =
-        (priceNum - discNum) +
-        gst +
-        shipping;
+      // ============================================================
+      // FINAL PAYABLE
+      // ============================================================
 
-      const newOrder = await prisma.order.create({
-        data: {
+      const total = Number(
+        (
+          taxableAmount +
+          gst +
+          shipping
+        ).toFixed(2)
+      );
 
-          userId: userAuth.id,
+      // ============================================================
+      // FINAL ORDER ITEMS
+      // Remove undefined image values
+      // ============================================================
 
-          customerName,
+      const finalItems = serverItems.map(
+        (item: any) => {
+          const cleanItem: any = {
+            productId: item.productId,
+            name: item.name,
+            sku: item.sku,
+            qty: item.qty,
+            quantity: item.quantity,
+            price: item.price,
+            unitPrice: item.unitPrice,
+            lineTotal: item.lineTotal,
+          };
 
-          customerPhone,
+          if (item.image) {
+            cleanItem.image = item.image;
+          }
 
-          address,
+          return cleanItem;
+        }
+      );
 
-          pincode,
+      // ============================================================
+      // CREATE ORDER
+      // ============================================================
 
-          items,
+      const newOrder =
+        await prisma.order.create({
+          data: {
+            userId: userAuth.id,
 
-          adminPrice: priceNum,
+            customerName,
+            customerPhone,
+            address,
+            pincode,
+
+            items: finalItems,
+
+            // Original product subtotal
+            adminPrice: Number(
+              subtotal.toFixed(2)
+            ),
+
+            // GST AFTER COUPON
+            gstAmount: gst,
+
+            shippingCharge: shipping,
+
+            // Coupon discount amount
+            discount: couponDiscount,
+
+            // Final payable amount
+            totalAmount: total,
+
+            courierId: courierId
+              ? Number(courierId)
+              : null,
+
+            courierName:
+              courierName || null,
+
+            status: "PENDING",
+          },
+        });
+
+      // ============================================================
+      // INCREMENT COUPON USAGE
+      // ============================================================
+
+      if (appliedCouponCode) {
+        await prisma.coupon.update({
+          where: {
+            code: appliedCouponCode,
+          },
+          data: {
+            usedCount: {
+              increment: 1,
+            },
+          },
+        });
+      }
+
+      // ============================================================
+      // RESPONSE
+      // ============================================================
+
+      return res.status(200).json({
+        success: true,
+
+        message: "Order placed successfully.",
+
+        order: newOrder,
+
+        pricing: {
+          subtotal: Number(
+            subtotal.toFixed(2)
+          ),
+
+          couponCode:
+            appliedCouponCode,
+
+          discountPercent:
+            appliedDiscountPercent,
+
+          slabMinAmount:
+            appliedSlabMinAmount,
+
+          discountAmount:
+            couponDiscount,
+
+          taxableAmount,
+
+          gstPercent: 3,
 
           gstAmount: gst,
 
-          shippingCharge: shipping,
+          shippingCharge:
+            shipping,
 
-          discount: discNum,
-
-          totalAmount: total,
-
-          courierId: courierId
-            ? Number(courierId)
-            : null,
-
-          courierName: courierName || null,
-
-          status: "PENDING"
-
-        }
+          finalAmount:
+            total,
+        },
       });
 
-      return res.status(200).json({ success: true, order: newOrder });
-    } catch (err) {
-      console.error("ORDER ERROR:", err);
-      return res.status(500).json({ success: false, message: "Calculation failed" });
+    } catch (err: any) {
+      console.error(
+        "ORDER ERROR:",
+        err
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          err?.message ||
+          "Order calculation failed.",
+      });
     }
   }
 
@@ -177,109 +528,109 @@ export default class OrderController {
   }
 
   // =============================
-// Refresh Shipment Tracking
-// =============================
+  // Refresh Shipment Tracking
+  // =============================
 
-static async refreshTracking(
-  req: Request,
-  res: Response
-) {
+  static async refreshTracking(
+    req: Request,
+    res: Response
+  ) {
 
-  try {
+    try {
 
-    const userId = (req as any).user.id;
+      const userId = (req as any).user.id;
 
-    const orders = await prisma.order.findMany({
+      const orders = await prisma.order.findMany({
 
-      where: {
+        where: {
 
-        userId,
+          userId,
 
-        awbNumber: {
+          awbNumber: {
 
-          not: null
+            not: null
+
+          }
+
+        }
+
+      });
+
+      for (const order of orders) {
+
+        try {
+
+          const tracking =
+            await NimbusService.trackShipment(
+              order.awbNumber!
+            );
+
+          const shipment =
+            tracking.data;
+
+          await prisma.order.update({
+
+            where: {
+
+              id: order.id
+
+            },
+
+            data: {
+
+              shipmentStatus:
+
+                shipment.current_status_name ||
+
+                shipment.current_status ||
+
+                order.shipmentStatus
+
+            }
+
+          });
+
+        }
+
+        catch (err) {
+
+          console.error(
+
+            `Tracking failed for ${order.awbNumber}`,
+
+            err
+
+          );
 
         }
 
       }
 
-    });
+      return res.json({
 
-    for (const order of orders) {
+        success: true,
 
-      try {
+        message: "Tracking refreshed."
 
-        const tracking =
-          await NimbusService.trackShipment(
-            order.awbNumber!
-          );
-
-        const shipment =
-          tracking.data;
-
-        await prisma.order.update({
-
-          where: {
-
-            id: order.id
-
-          },
-
-          data: {
-
-            shipmentStatus:
-
-              shipment.current_status_name ||
-
-              shipment.current_status ||
-
-              order.shipmentStatus
-
-          }
-
-        });
-
-      }
-
-      catch (err) {
-
-        console.error(
-
-          `Tracking failed for ${order.awbNumber}`,
-
-          err
-
-        );
-
-      }
+      });
 
     }
 
-    return res.json({
+    catch (error) {
 
-      success: true,
+      console.error(error);
 
-      message: "Tracking refreshed."
+      return res.status(500).json({
 
-    });
+        success: false,
 
-  }
+        message: "Unable to refresh tracking."
 
-  catch (error) {
+      });
 
-    console.error(error);
-
-    return res.status(500).json({
-
-      success: false,
-
-      message: "Unable to refresh tracking."
-
-    });
+    }
 
   }
-
-}
 
   // OrderController.ts - updateOrderStatus update karo
   static async updateOrderStatus(

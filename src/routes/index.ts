@@ -7,6 +7,7 @@ import orderRoutes from "./orderRoutes";
 import feedbackRoutes from "./feedbackRoutes";
 import shippingRoutes from "./shippingRoutes";
 import analyticsRoutes from "../analytics/routes/analyticsRoutes.js";
+import couponRoutes from "./couponRoutes.js";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use("/api/order", orderRoutes);
 router.use("/api/feedback", feedbackRoutes);
 router.use("/api/shipping", shippingRoutes);
 router.use("/api/analytics",analyticsRoutes);
+router.use("/api/coupons", couponRoutes);
 
 export default router;
