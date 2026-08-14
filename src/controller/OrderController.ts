@@ -94,6 +94,17 @@ export default class OrderController {
       }
 
       // ============================================================
+      // NORMALIZED USER ID
+      // IMPORTANT:
+      // Har jagah userId ko String() se consistently use karo,
+      // taaki FIRST_ORDER coupon check / order history match
+      // kabhi type-mismatch ki wajah se galat na ho.
+      // ============================================================
+
+      const normalizedUserId = String(userAuth.id);
+      console.log("LoggedIn User ID:", normalizedUserId, typeof normalizedUserId);
+
+      // ============================================================
       // GET CURRENT PRODUCT PRICES FROM DATABASE
       // IMPORTANT:
       // NEVER TRUST FRONTEND PRICE
@@ -182,6 +193,10 @@ export default class OrderController {
       // COUPON VALIDATION
       // ============================================================
 
+      // ============================================================
+      // COUPON VALIDATION
+      // ============================================================
+
       let couponDiscount = 0;
       let appliedCouponCode: string | null = null;
       let appliedDiscountPercent = 0;
@@ -213,6 +228,32 @@ export default class OrderController {
           });
         }
 
+        // ========================================================
+        // FIRST ORDER COUPON ELIGIBILITY
+        // ========================================================
+
+
+
+        // Inside placeOrder method:
+        if (String(coupon.eligibility) === "FIRST_ORDER") {
+          const previousOrder = await prisma.order.findFirst({
+            where: {
+              userId: normalizedUserId,
+              status: {
+                notIn: ["CANCELLED", "REJECTED"],
+              },
+            },
+            select: { id: true },
+          });
+
+          if (previousOrder) {
+            return res.status(400).json({
+              success: false,
+              message: "This coupon is valid only for your first order.",
+            });
+          }
+        }
+
         // Active check
         if (!coupon.isActive) {
           return res.status(400).json({
@@ -232,7 +273,7 @@ export default class OrderController {
           });
         }
 
-        // Expiry check
+        // Expiry date check
         if (
           coupon.expiresAt &&
           new Date() > coupon.expiresAt
@@ -376,7 +417,7 @@ export default class OrderController {
       const newOrder =
         await prisma.order.create({
           data: {
-            userId: userAuth.id,
+            userId: normalizedUserId,
 
             customerName,
             customerPhone,
@@ -519,7 +560,12 @@ export default class OrderController {
   }
 
   static async getMyOrders(req: Request, res: Response) {
-    const userId = (req as any).user.id;
+    // IMPORTANT: userId ko String() se normalize kiya, taaki
+    // is query ka result kabhi bhi type-mismatch ki wajah se
+    // khaali na aaye — warna frontend "hasPreviousOrder" galat
+    // false maan leta hai aur FIRST_ORDER coupon galat apply
+    // ho jaata hai purane customer ke liye bhi.
+    const userId = String((req as any).user.id);
     const orders = await prisma.order.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' }
@@ -538,7 +584,7 @@ export default class OrderController {
 
     try {
 
-      const userId = (req as any).user.id;
+      const userId = String((req as any).user.id);
 
       const orders = await prisma.order.findMany({
 
@@ -1050,7 +1096,7 @@ AUTO SAVE BILL
     }
   }
   static async getMyNotifications(req: Request, res: Response) {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const notifications = await prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' }

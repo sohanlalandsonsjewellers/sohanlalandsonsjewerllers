@@ -21,7 +21,7 @@ export const setAuthCookies = (
   // 15 Minutes Access Cookie
   res.cookie("access_token", accessToken, {
     ...cookieOptions,
-    maxAge: 15 * 60 * 1000,
+    maxAge: 60 * 60 * 1000,
   });
 
   // 7 Days Refresh Cookie

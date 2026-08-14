@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import {
+    PrismaClient,
+    CouponEligibility,
+} from "@prisma/client";
 
 const prisma = new PrismaClient();
-
-
 
 interface CouponSlabInput {
     minAmount: number;
@@ -32,22 +33,24 @@ interface CartItemInput {
     qty: number;
 }
 
-
 class CouponController {
 
+    // ==============================================================
     // CREATE COUPON
+    // ==============================================================
+
     static async create(
         req: Request,
         res: Response
     ) {
         try {
-
             const {
                 code,
                 description,
                 startAt,
                 expiresAt,
                 usageLimit,
+                eligibility,
                 slabs,
             } = req.body;
 
@@ -86,6 +89,32 @@ class CouponController {
                 code.trim().toUpperCase();
 
             // --------------------------------------------------------
+            // NORMALIZE ELIGIBILITY
+            // --------------------------------------------------------
+
+            const normalizedEligibility =
+                eligibility === undefined ||
+                    eligibility === null ||
+                    eligibility === ""
+                    ? CouponEligibility.ALL
+                    : String(eligibility)
+                        .trim()
+                        .toUpperCase();
+
+            if (
+                normalizedEligibility !==
+                CouponEligibility.ALL &&
+                normalizedEligibility !==
+                CouponEligibility.FIRST_ORDER
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Eligibility must be ALL or FIRST_ORDER",
+                });
+            }
+
+            // --------------------------------------------------------
             // CHECK DUPLICATE COUPON
             // --------------------------------------------------------
 
@@ -110,7 +139,9 @@ class CouponController {
 
             const normalizedSlabs: CouponSlabInput[] =
                 slabs.map(
-                    (slab: any): CouponSlabInput => ({
+                    (
+                        slab: any
+                    ): CouponSlabInput => ({
                         minAmount:
                             Number(
                                 slab.minAmount
@@ -130,7 +161,6 @@ class CouponController {
             for (
                 const slab of normalizedSlabs
             ) {
-
                 // Minimum amount
 
                 if (
@@ -169,7 +199,9 @@ class CouponController {
 
             const minAmounts: number[] =
                 normalizedSlabs.map(
-                    (slab: CouponSlabInput) =>
+                    (
+                        slab: CouponSlabInput
+                    ) =>
                         slab.minAmount
                 );
 
@@ -209,7 +241,6 @@ class CouponController {
             const coupon =
                 await prisma.coupon.create({
                     data: {
-
                         code:
                             normalizedCode,
 
@@ -221,6 +252,9 @@ class CouponController {
                                 : null,
 
                         isActive: true,
+
+                        eligibility:
+                            normalizedEligibility,
 
                         startAt:
                             startAt
@@ -260,7 +294,6 @@ class CouponController {
             });
 
         } catch (error: any) {
-
             console.error(
                 "Create Coupon Error:",
                 error
@@ -276,637 +309,197 @@ class CouponController {
         }
     }
 
+    // ==============================================================
     // VALIDATE COUPON
-    static async validate(
-        req: Request,
-        res: Response
-    ) {
+    // ==============================================================
+
+    static async validate(req: Request, res: Response) {
         try {
+            const { code, items } = req.body;
 
-            const {
-                code,
-                items,
-            } = req.body;
-
-            // --------------------------------------------------------
-            // VALIDATE COUPON CODE
-            // --------------------------------------------------------
-
-            if (
-                !code ||
-                typeof code !== "string" ||
-                code.trim() === ""
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Coupon code is required",
-                });
+            if (!code || typeof code !== "string" || code.trim() === "") {
+                return res.status(400).json({ success: false, message: "Coupon code is required" });
             }
 
-            // --------------------------------------------------------
-            // VALIDATE CART ITEMS
-            // --------------------------------------------------------
-
-            if (
-                !Array.isArray(items) ||
-                items.length === 0
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Cart items are required",
-                });
+            if (!Array.isArray(items) || items.length === 0) {
+                return res.status(400).json({ success: false, message: "Cart items are required" });
             }
 
-            // --------------------------------------------------------
-            // NORMALIZE COUPON CODE
-            // --------------------------------------------------------
+            const normalizedCode = code.trim().toUpperCase();
 
-            const normalizedCode =
-                code.trim().toUpperCase();
-
-            // --------------------------------------------------------
-            // FIND COUPON
-            // --------------------------------------------------------
-
-            const coupon =
-                await prisma.coupon.findUnique({
-                    where: {
-                        code:
-                            normalizedCode,
-                    },
-
-                    include: {
-                        slabs: true,
-                    },
-                });
-
-            // --------------------------------------------------------
-            // COUPON NOT FOUND
-            // --------------------------------------------------------
+            const coupon = await prisma.coupon.findUnique({
+                where: { code: normalizedCode },
+                include: { slabs: true },
+            });
 
             if (!coupon) {
-                return res.status(404).json({
-                    success: false,
-                    message:
-                        "Invalid coupon code",
-                });
+                return res.status(404).json({ success: false, message: "Invalid coupon code" });
             }
 
-            // --------------------------------------------------------
-            // ACTIVE CHECK
-            // --------------------------------------------------------
+            // ========================================================
+            // FIRST ORDER ELIGIBILITY CHECK (FIXED)
+            // ========================================================
+            if (coupon.eligibility === CouponEligibility.FIRST_ORDER) {
+                const userId = (req as any).user?.id;
+
+                if (!userId) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Please login to use this first-order coupon.",
+                    });
+                }
+
+                // Agar user ka koi bhi order jo CANCELLED ya REJECTED nahi hai exist karta hai, 
+                // toh woh purana customer hai aur use FIRST_ORDER coupon nahi milega.
+                const previousOrder = await prisma.order.findFirst({
+                    where: {
+                        userId: String(userId),
+                        status: {
+                            notIn: ["CANCELLED", "REJECTED"],
+                        },
+                    },
+                    select: { id: true },
+                });
+
+                if (previousOrder) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "This coupon is valid only for your first order.",
+                    });
+                }
+            }
 
             if (!coupon.isActive) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "This coupon is inactive",
-                });
+                return res.status(400).json({ success: false, message: "This coupon is inactive" });
             }
 
-            // --------------------------------------------------------
-            // DATE CHECK
-            // --------------------------------------------------------
-
-            const now =
-                new Date();
-
-            if (
-                coupon.startAt &&
-                now < coupon.startAt
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "This coupon is not active yet",
-                });
+            const now = new Date();
+            if (coupon.startAt && now < coupon.startAt) {
+                return res.status(400).json({ success: false, message: "This coupon is not active yet" });
             }
 
-            if (
-                coupon.expiresAt &&
-                now > coupon.expiresAt
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "This coupon has expired",
-                });
+            if (coupon.expiresAt && now > coupon.expiresAt) {
+                return res.status(400).json({ success: false, message: "This coupon has expired" });
             }
 
-            // --------------------------------------------------------
-            // USAGE LIMIT CHECK
-            // --------------------------------------------------------
-
-            if (
-                coupon.usageLimit !==
-                null &&
-                coupon.usedCount >=
-                coupon.usageLimit
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "This coupon usage limit has been reached",
-                });
+            if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+                return res.status(400).json({ success: false, message: "This coupon usage limit has been reached" });
             }
 
-            // --------------------------------------------------------
-            // NORMALIZE CART ITEMS
-            // --------------------------------------------------------
+            // Calculate Subtotal from database products
+            const productIds = items.map((item: any) => String(item.productId));
+            const products = await prisma.product.findMany({
+                where: { id: { in: productIds }, deletedAt: null },
+            });
 
-            const cartItems:
-                CartItemInput[] =
-                items.map(
-                    (item: any): CartItemInput => ({
-                        productId:
-                            String(
-                                item.productId
-                            ),
-
-                        qty:
-                            Number(
-                                item.qty
-                            ),
-                    })
-                );
-
-            // --------------------------------------------------------
-            // VALIDATE CART ITEMS
-            // --------------------------------------------------------
-
-            for (
-                const item of cartItems
-            ) {
-
-                if (
-                    !item.productId ||
-                    item.productId ===
-                    "undefined" ||
-                    item.productId ===
-                    "null"
-                ) {
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            "Invalid product ID in cart",
-                    });
-                }
-
-                if (
-                    !Number.isInteger(
-                        item.qty
-                    ) ||
-                    item.qty <= 0
-                ) {
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            "Invalid product quantity",
-                    });
-                }
+            if (products.length !== productIds.length) {
+                return res.status(400).json({ success: false, message: "One or more cart products are no longer available" });
             }
-
-            // --------------------------------------------------------
-            // UNIQUE PRODUCT IDS
-            // --------------------------------------------------------
-
-            const productIds:
-                string[] =
-                Array.from(
-                    new Set<string>(
-                        cartItems.map(
-                            (
-                                item: CartItemInput
-                            ) =>
-                                item.productId
-                        )
-                    )
-                );
-
-            // --------------------------------------------------------
-            // FETCH CURRENT DATABASE PRICES
-            // --------------------------------------------------------
-
-            const productsRaw =
-                await prisma.product.findMany({
-                    where: {
-
-                        id: {
-                            in:
-                                productIds,
-                        },
-
-                        deletedAt:
-                            null,
-                    },
-
-                    select: {
-
-                        id: true,
-
-                        name: true,
-
-                        price: true,
-
-                        stock: true,
-
-                        sku: true,
-                    },
-                });
-
-            // --------------------------------------------------------
-            // EXPLICIT PRODUCT TYPE
-            // --------------------------------------------------------
-
-            const products:
-                ProductRow[] =
-                productsRaw.map(
-                    (
-                        product
-                    ): ProductRow => ({
-                        id:
-                            product.id,
-
-                        name:
-                            product.name,
-
-                        price:
-                            Number(
-                                product.price
-                            ),
-
-                        stock:
-                            Number(
-                                product.stock
-                            ),
-
-                        sku:
-                            product.sku,
-                    })
-                );
-
-            // --------------------------------------------------------
-            // CHECK ALL PRODUCTS EXIST
-            // --------------------------------------------------------
-
-            if (
-                products.length !==
-                productIds.length
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "One or more cart products are no longer available",
-                });
-            }
-
-            // --------------------------------------------------------
-            // PRODUCT MAP
-            // --------------------------------------------------------
-
-            const productMap:
-                Map<string, ProductRow> =
-                new Map<
-                    string,
-                    ProductRow
-                >();
-
-            products.forEach(
-                (
-                    product: ProductRow
-                ) => {
-
-                    productMap.set(
-                        product.id,
-                        product
-                    );
-                }
-            );
-
-            // --------------------------------------------------------
-            // CALCULATE REAL SUBTOTAL
-            // --------------------------------------------------------
 
             let subtotal = 0;
+            const validatedItems = items.map((item: any) => {
+                const product = products.find((p) => p.id === item.productId);
+                if (!product) throw new Error("Product not found");
+                const qty = Number(item.qty);
+                if (qty > product.stock) {
+                    throw new Error(`${product.name} does not have enough stock`);
+                }
+                const unitPrice = Number(product.price);
+                const lineTotal = unitPrice * qty;
+                subtotal += lineTotal;
+                return {
+                    productId: product.id,
+                    name: product.name,
+                    sku: product.sku,
+                    quantity: qty,
+                    unitPrice,
+                    lineTotal: Number(lineTotal.toFixed(2)),
+                };
+            });
 
-            const validatedItems =
-                cartItems.map(
-                    (
-                        item: CartItemInput
-                    ) => {
+            subtotal = Number(subtotal.toFixed(2));
 
-                        const product:
-                            ProductRow |
-                            undefined =
-                            productMap.get(
-                                item.productId
-                            );
+            // Find eligible slabs
+            const eligibleSlabs = coupon.slabs
+                .filter((slab) => subtotal >= Number(slab.minAmount))
+                .sort((a, b) => Number(b.minAmount) - Number(a.minAmount));
 
-                        // ------------------------------------------------
-                        // PRODUCT NOT FOUND
-                        // ------------------------------------------------
-
-                        if (!product) {
-                            throw new Error(
-                                "Product not found"
-                            );
-                        }
-
-                        // ------------------------------------------------
-                        // STOCK CHECK
-                        // ------------------------------------------------
-
-                        if (
-                            item.qty >
-                            product.stock
-                        ) {
-                            throw new Error(
-                                `${product.name} does not have enough stock`
-                            );
-                        }
-
-                        // ------------------------------------------------
-                        // CURRENT DATABASE PRICE
-                        // ------------------------------------------------
-
-                        const unitPrice:
-                            number =
-                            Number(
-                                product.price
-                            );
-
-                        // ------------------------------------------------
-                        // LINE TOTAL
-                        // ------------------------------------------------
-
-                        const lineTotal:
-                            number =
-                            unitPrice *
-                            item.qty;
-
-                        subtotal +=
-                            lineTotal;
-
-                        return {
-
-                            productId:
-                                product.id,
-
-                            name:
-                                product.name,
-
-                            sku:
-                                product.sku,
-
-                            quantity:
-                                item.qty,
-
-                            unitPrice,
-
-                            lineTotal:
-                                Number(
-                                    lineTotal.toFixed(
-                                        2
-                                    )
-                                ),
-                        };
-                    }
-                );
-
-            // --------------------------------------------------------
-            // ROUND SUBTOTAL
-            // --------------------------------------------------------
-
-            subtotal =
-                Number(
-                    subtotal.toFixed(
-                        2
-                    )
-                );
-
-            // --------------------------------------------------------
-            // TYPE COUPON SLABS
-            // --------------------------------------------------------
-
-            const couponSlabs:
-                CouponSlabRow[] =
-                coupon.slabs.map(
-                    (
-                        slab
-                    ): CouponSlabRow => ({
-                        id:
-                            slab.id,
-
-                        couponId:
-                            slab.couponId,
-
-                        minAmount:
-                            Number(
-                                slab.minAmount
-                            ),
-
-                        discountPercent:
-                            Number(
-                                slab.discountPercent
-                            ),
-
-                        createdAt:
-                            slab.createdAt,
-
-                        updatedAt:
-                            slab.updatedAt,
-                    })
-                );
-
-            // --------------------------------------------------------
-            // FIND ELIGIBLE SLABS
-            // --------------------------------------------------------
-
-            const eligibleSlabs:
-                CouponSlabRow[] =
-                couponSlabs
-                    .filter(
-                        (
-                            slab: CouponSlabRow
-                        ) =>
-                            subtotal >=
-                            slab.minAmount
-                    )
-                    .sort(
-                        (
-                            a: CouponSlabRow,
-                            b: CouponSlabRow
-                        ) =>
-                            b.minAmount -
-                            a.minAmount
-                    );
-
-            // --------------------------------------------------------
-            // NO ELIGIBLE SLAB
-            // --------------------------------------------------------
-
-            if (
-                eligibleSlabs.length ===
-                0
-            ) {
-
-                const minimumRequired:
-                    number =
-                    Math.min(
-                        ...couponSlabs.map(
-                            (
-                                slab: CouponSlabRow
-                            ) =>
-                                slab.minAmount
-                        )
-                    );
-
+            if (eligibleSlabs.length === 0) {
+                const minimumRequired = Math.min(...coupon.slabs.map((slab) => Number(slab.minAmount)));
                 return res.status(400).json({
-
                     success: false,
-
-                    message:
-                        `Minimum cart value of ₹${minimumRequired} is required for this coupon`,
-
+                    message: `Minimum cart value of ₹${minimumRequired} is required for this coupon`,
                     subtotal,
-
                     minimumRequired,
                 });
             }
 
-            // --------------------------------------------------------
-            // SELECT BEST SLAB
-            // --------------------------------------------------------
-
-            const selectedSlab:
-                CouponSlabRow =
-                eligibleSlabs[0];
-
-            // --------------------------------------------------------
-            // DISCOUNT PERCENTAGE
-            // --------------------------------------------------------
-
-            const discountPercent:
-                number =
-                selectedSlab.discountPercent;
-
-            // --------------------------------------------------------
-            // DISCOUNT AMOUNT
-            // --------------------------------------------------------
-
-            const discountAmount:
-                number =
-                Number(
-                    (
-                        subtotal *
-                        discountPercent /
-                        100
-                    ).toFixed(2)
-                );
-
-            // --------------------------------------------------------
-            // TAXABLE AMOUNT
-            // --------------------------------------------------------
-
-            const taxableAmount:
-                number =
-                Number(
-                    (
-                        subtotal -
-                        discountAmount
-                    ).toFixed(2)
-                );
-
-            // --------------------------------------------------------
-            // SUCCESS RESPONSE
-            // --------------------------------------------------------
+            const selectedSlab = eligibleSlabs[0];
+            const discountPercent = Number(selectedSlab.discountPercent);
+            const discountAmount = Number(((subtotal * discountPercent) / 100).toFixed(2));
+            const taxableAmount = Number((subtotal - discountAmount).toFixed(2));
 
             return res.status(200).json({
-
                 success: true,
-
-                message:
-                    "Coupon applied successfully",
-
+                message: "Coupon applied successfully",
                 coupon: {
-
-                    code:
-                        coupon.code,
-
+                    code: coupon.code,
                     slab: {
-
-                        minAmount:
-                            selectedSlab.minAmount,
-
+                        minAmount: Number(selectedSlab.minAmount),
                         discountPercent,
                     },
                 },
-
                 pricing: {
-
                     subtotal,
-
                     discountPercent,
-
                     discountAmount,
-
                     taxableAmount,
                 },
-
-                items:
-                    validatedItems,
+                items: validatedItems,
             });
-
-        } catch (
-        error: any
-        ) {
-
-            console.error(
-                "Validate Coupon Error:",
-                error
-            );
-
+        } catch (error: any) {
+            console.error("Validate Coupon Error:", error);
             return res.status(500).json({
-
                 success: false,
-
-                message:
-                    error?.message ||
-                    "Failed to validate coupon",
+                message: error?.message || "Failed to validate coupon",
             });
         }
     }
 
-
+    // ==============================================================
     // GET ALL COUPONS
+    // ==============================================================
+
     static async getAll(
         req: Request,
         res: Response
     ) {
         try {
-            const coupons = await prisma.coupon.findMany({
-                include: {
-                    slabs: {
-                        orderBy: {
-                            minAmount: "asc",
+            const coupons =
+                await prisma.coupon.findMany({
+                    include: {
+                        slabs: {
+                            orderBy: {
+                                minAmount:
+                                    "asc",
+                            },
                         },
                     },
-                },
-                orderBy: {
-                    createdAt: "desc",
-                },
-            });
+
+                    orderBy: {
+                        createdAt:
+                            "desc",
+                    },
+                });
 
             return res.status(200).json({
                 success: true,
-                count: coupons.length,
+                count:
+                    coupons.length,
                 coupons,
             });
 
         } catch (error: any) {
-
             console.error(
                 "Get All Coupons Error:",
                 error
@@ -914,8 +507,10 @@ class CouponController {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch coupons",
-                error: error?.message,
+                message:
+                    "Failed to fetch coupons",
+                error:
+                    error?.message,
             });
         }
     }
@@ -929,7 +524,8 @@ class CouponController {
         res: Response
     ) {
         try {
-            const { id } = req.params;
+            const { id } =
+                req.params;
 
             const {
                 code,
@@ -938,6 +534,7 @@ class CouponController {
                 expiresAt,
                 usageLimit,
                 isActive,
+                eligibility,
                 slabs,
             } = req.body;
 
@@ -948,7 +545,8 @@ class CouponController {
             if (!id) {
                 return res.status(400).json({
                     success: false,
-                    message: "Coupon ID is required",
+                    message:
+                        "Coupon ID is required",
                 });
             }
 
@@ -961,6 +559,7 @@ class CouponController {
                     where: {
                         id,
                     },
+
                     include: {
                         slabs: true,
                     },
@@ -969,7 +568,8 @@ class CouponController {
             if (!existingCoupon) {
                 return res.status(404).json({
                     success: false,
-                    message: "Coupon not found",
+                    message:
+                        "Coupon not found",
                 });
             }
 
@@ -1022,6 +622,41 @@ class CouponController {
                             "Another coupon already uses this code",
                     });
                 }
+            }
+
+            // --------------------------------------------------------
+            // NORMALIZE / VALIDATE ELIGIBILITY
+            // --------------------------------------------------------
+
+            let normalizedEligibility:
+                CouponEligibility |
+                undefined;
+
+            if (
+                eligibility !== undefined
+            ) {
+                const value =
+                    String(
+                        eligibility
+                    )
+                        .trim()
+                        .toUpperCase();
+
+                if (
+                    value !==
+                    CouponEligibility.ALL &&
+                    value !==
+                    CouponEligibility.FIRST_ORDER
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Eligibility must be ALL or FIRST_ORDER",
+                    });
+                }
+
+                normalizedEligibility =
+                    value as CouponEligibility;
             }
 
             // --------------------------------------------------------
@@ -1094,7 +729,7 @@ class CouponController {
                         return res.status(400).json({
                             success: false,
                             message:
-                                "Discount percentage must be greater than 0 and up to 100",
+                                "Discount percentage must be between 0 and 100%.",
                         });
                     }
                 }
@@ -1208,6 +843,14 @@ class CouponController {
                     Boolean(isActive);
             }
 
+            if (
+                normalizedEligibility !==
+                undefined
+            ) {
+                updateData.eligibility =
+                    normalizedEligibility;
+            }
+
             // --------------------------------------------------------
             // UPDATE COUPON
             // --------------------------------------------------------
@@ -1238,7 +881,6 @@ class CouponController {
                             normalizedSlabs !==
                             undefined
                         ) {
-
                             await tx.couponSlab.deleteMany({
                                 where: {
                                     couponId:
@@ -1299,7 +941,6 @@ class CouponController {
             });
 
         } catch (error: any) {
-
             console.error(
                 "Update Coupon Error:",
                 error
@@ -1315,12 +956,88 @@ class CouponController {
         }
     }
 
-
     // ==============================================================
     // TOGGLE COUPON ACTIVE / INACTIVE
     // ==============================================================
 
     static async toggleStatus(
+        req: Request,
+        res: Response
+    ) {
+        try {
+            const { id } =
+                req.params;
+
+            if (!id) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Coupon ID is required",
+                });
+            }
+
+            const existingCoupon =
+                await prisma.coupon.findUnique({
+                    where: {
+                        id,
+                    },
+                });
+
+            if (!existingCoupon) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "Coupon not found",
+                });
+            }
+
+            const updatedCoupon =
+                await prisma.coupon.update({
+                    where: {
+                        id,
+                    },
+
+                    data: {
+                        isActive:
+                            !existingCoupon.isActive,
+                    },
+                });
+
+            return res.status(200).json({
+                success: true,
+
+                message:
+                    updatedCoupon.isActive
+                        ? "Coupon activated successfully"
+                        : "Coupon deactivated successfully",
+
+                coupon:
+                    updatedCoupon,
+            });
+
+        } catch (error: any) {
+            console.error(
+                "Toggle Coupon Error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    "Failed to update coupon status",
+                error:
+                    error?.message,
+            });
+        }
+    }
+
+
+    // ==============================================================
+    // DELETE COUPON
+    // Admin-only route. Slabs are removed before the coupon.
+    // ==============================================================
+
+    static async delete(
         req: Request,
         res: Response
     ) {
@@ -1336,9 +1053,8 @@ class CouponController {
 
             const existingCoupon =
                 await prisma.coupon.findUnique({
-                    where: {
-                        id,
-                    },
+                    where: { id },
+                    select: { id: true, code: true },
                 });
 
             if (!existingCoupon) {
@@ -1348,39 +1064,27 @@ class CouponController {
                 });
             }
 
-            const updatedCoupon =
-                await prisma.coupon.update({
-                    where: {
-                        id,
-                    },
-                    data: {
-                        isActive:
-                            !existingCoupon.isActive,
-                    },
+            await prisma.$transaction(async (tx) => {
+                await tx.couponSlab.deleteMany({
+                    where: { couponId: id },
                 });
+
+                await tx.coupon.delete({
+                    where: { id },
+                });
+            });
 
             return res.status(200).json({
                 success: true,
-                message: updatedCoupon.isActive
-                    ? "Coupon activated successfully"
-                    : "Coupon deactivated successfully",
-
-                coupon: updatedCoupon,
+                message: `Coupon ${existingCoupon.code} deleted successfully`,
             });
-
         } catch (error: any) {
-
-            console.error(
-                "Toggle Coupon Error:",
-                error
-            );
+            console.error("Delete Coupon Error:", error);
 
             return res.status(500).json({
                 success: false,
-                message:
-                    "Failed to update coupon status",
-                error:
-                    error?.message,
+                message: "Failed to delete coupon",
+                error: error?.message,
             });
         }
     }
