@@ -166,12 +166,22 @@ export default class OrderController {
         return {
           productId: product.id,
           name: product.name,
+
+          // ✅ Product se server-side category
+          category: product.category || "",
+
+          // ✅ Product se server-side HSN/SAC
+          hsnCode: product.hsnCode || "",
+
           sku: product.sku,
+
           quantity,
           qty: quantity,
+
           unitPrice,
           price: unitPrice,
           lineTotal,
+
           image:
             Array.isArray(product.images)
               ? product.images[0]
@@ -393,8 +403,14 @@ export default class OrderController {
         (item: any) => {
           const cleanItem: any = {
             productId: item.productId,
+
+            // ✅ Product information
             name: item.name,
-            sku: item.sku,
+            category: item.category || "",
+            hsnCode: item.hsnCode || "",
+            sku: item.sku || "",
+
+            // ✅ Quantity / pricing
             qty: item.qty,
             quantity: item.quantity,
             price: item.price,
@@ -402,6 +418,7 @@ export default class OrderController {
             lineTotal: item.lineTotal,
           };
 
+          // ✅ Preserve image if available
           if (item.image) {
             cleanItem.image = item.image;
           }

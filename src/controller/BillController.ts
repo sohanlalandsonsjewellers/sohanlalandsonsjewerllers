@@ -32,6 +32,7 @@ export default class BillController {
 
       const discount = Number(payload.discount || 0);
       const afterDiscount = totalAmount - discount;
+      const category = payload.items[0]?.category || "unknown";
 
       const gstPercent = Number(payload.gstPercent ?? 3);
       const gstAmount = +(afterDiscount * gstPercent) / 100;
@@ -58,6 +59,7 @@ export default class BillController {
           customerAddress: payload.customerAddress || "",
           customerPincode: payload.customerPincode || "",
           customerEmail: payload.customerEmail || null,
+          category,
           items: payload.items,
           totalAmount,
           discount,
