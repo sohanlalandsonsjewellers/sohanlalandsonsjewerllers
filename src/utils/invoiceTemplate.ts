@@ -192,16 +192,23 @@ export default function invoiceHTML({ shop, bill }: any) {
             ${bill.billNo || "—"}
           </div>
 
-          <div>
-            <b>Date:</b>
-            ${
-              bill.created_at
-                ? new Date(
-                    bill.created_at
-                  ).toLocaleString("en-IN")
-                : "—"
-            }
-          </div>
+         <div>
+          <b>Date:</b>
+          ${
+            bill.created_at
+              ? new Date(bill.created_at).toLocaleString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: true,
+                })
+              : "—"
+          }
+        </div>
 
           <div>
             <b>Status:</b>
