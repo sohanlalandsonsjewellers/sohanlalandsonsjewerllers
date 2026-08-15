@@ -59,7 +59,6 @@ export default class BillController {
           customerAddress: payload.customerAddress || "",
           customerPincode: payload.customerPincode || "",
           customerEmail: payload.customerEmail || null,
-          category,
           items: payload.items,
           totalAmount,
           discount,
